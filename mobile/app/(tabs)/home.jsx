@@ -1,135 +1,391 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import React from 'react';
-import { LineChart, BarChart } from 'react-native-chart-kit';
-import { Dimensions } from 'react-native';
+import React, { useState, useCallback, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal } from 'react-native';
+import { BarChart, LineChart } from 'react-native-chart-kit';
+import { useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { StatusBar } from 'expo-status-bar';
+import { MaterialIcons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { scale, verticalScale, moderateScale, screenWidth } from '../../src/responsive';
 
-const screenWidth = Dimensions.get('window').width;
-
-const Home = () => {
-  return (
-    <ScrollView style={styles.container}>
-      {/* Greeting */}
-      <Text style={styles.greeting}>Hi, Jo!</Text>
-      <Text style={styles.subtext}>How are you today?</Text>
-
-      {/* Monthly Spending */}
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Monthly Spending</Text>
-        <Text style={styles.amount}>Php 3,240</Text>
-        <Text style={styles.change}>12% from last month</Text>
-        <TouchableOpacity style={styles.button}>
-          <Text style={styles.buttonText}>See emergency fund</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Budget Status */}
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Budget Status</Text>
-        <Text style={styles.status}>On Track</Text>
-        <Text style={styles.usage}>68% of budget used</Text>
-      </View>
-
-      {/* Spending by Category */}
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Spending by Category</Text>
-        <BarChart
-          data={{
-            labels: ['Entertainment', 'Transport', 'Food', 'Utilities', 'Others'],
-            datasets: [{ data: [500, 400, 800, 300, 200] }],
-          }}
-          width={screenWidth - 40}
-          height={220}
-          chartConfig={chartConfig}
-          verticalLabelRotation={30}
-        />
-      </View>
-
-      {/* Spending Trend */}
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Spending Trend</Text>
-        <LineChart
-          data={{
-            labels: ['Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr'],
-            datasets: [{ data: [3200, 3100, 3000, 2800, 2900, 3240] }],
-          }}
-          width={screenWidth - 40}
-          height={220}
-          chartConfig={chartConfig}
-        />
-      </View>
-    </ScrollView>
-  );
+const COLORS = {
+  background: '#141326',
+  cardBg: '#433DA3',
+  primary: '#E3823C',
+  accent: '#E33C3C',
+  text: '#FFFFFF',
+  textSecondary: '#D7C7EC',
+  yellow: '#FFC107',
 };
 
-const chartConfig = {
-  backgroundColor: '#ffffff',
-  backgroundGradientFrom: '#ffffff',
-  backgroundGradientTo: '#ffffff',
-  decimalPlaces: 0,
-  color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
-  labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+const Home = () => {
+  const [budgetData, setBudgetData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [username, setUsername] = useState('Jo');
+  const carouselRef = useRef(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadBudgetData();
+      loadUserData();
+    }, [])
+  );
+
+  const loadBudgetData = async () => {
+    try {
+      const jsonValue = await AsyncStorage.getItem('userBudget');
+      if (jsonValue != null) {
+        setBudgetData(JSON.parse(jsonValue));
+      }
+    } catch (e) {
+      console.error('Failed to load budget data', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadUserData = async () => {
+    try {
+      const userData = await AsyncStorage.getItem('userData');
+      if (userData != null) {
+        const user = JSON.parse(userData);
+        setUsername(user.name || user.username || 'Jo');
+      }
+    } catch (e) {
+      console.error('Failed to load user data', e);
+    }
+  };
+
+  const scrollToSlide = (index) => {
+    if (carouselRef.current) {
+      carouselRef.current.scrollTo({ x: index * (screenWidth - scale(40)), animated: true });
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+      </View>
+    );
+  }
+
+  if (!budgetData) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <Text style={styles.text}>No budget data found.</Text>
+        <Text style={styles.subtext}>Please complete the onboarding first.</Text>
+      </View>
+    );
+  }
+
+  // Calculations
+  const spendingLabels = budgetData.spendingPreferences.map(p => p.category);
+  const spendingValues = budgetData.spendingPreferences.map(p => {
+    if (p.fixedAmount) return p.fixedAmount;
+    if (p.percentage) return (budgetData.monthlyIncome * p.percentage) / 100;
+    return 0;
+  });
+
+  // Find Emergency Fund or fallback
+  const emergencyFund =
+    budgetData.savingsGoals.find(g => g.name.toLowerCase().includes('emergency')) ||
+    budgetData.savingsGoals[0] ||
+    { name: 'Emergency Fund', currentSavings: 0, targetAmount: 0 };
+
+  // Savings Rate
+  const totalSavings = budgetData.savingsGoals.reduce((sum, goal) => sum + (goal.currentSavings || 0), 0);
+  const savingsRate = budgetData.monthlyIncome > 0 ? Math.round((totalSavings / budgetData.monthlyIncome) * 100) : 0;
+
+  const chartConfig = {
+    backgroundColor: COLORS.cardBg,
+    backgroundGradientFrom: COLORS.cardBg,
+    backgroundGradientTo: COLORS.cardBg,
+    decimalPlaces: 0,
+    color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+    labelColor: (opacity = 1) => `rgba(215, 199, 236, ${opacity})`,
+    style: { borderRadius: moderateScale(16) },
+    barPercentage: 0.7,
+    propsForLabels: { fontSize: moderateScale(10), fontFamily: 'Poppins-Regular' },
+  };
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <StatusBar style="light" backgroundColor={COLORS.background} translucent={false} />
+
+      {/* Budget Alert Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={alertVisible}
+        onRequestClose={() => setAlertVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Budget Alert!</Text>
+            <Text style={styles.modalText}>
+              You're approaching your entertainment budget limit. Consider reducing spending in this category.
+            </Text>
+            <TouchableOpacity onPress={() => setAlertVisible(false)} style={styles.modalButton}>
+              <Text style={styles.modalButtonText}>Back</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.greeting}>Hi, {username}!</Text>
+            <Text style={styles.subtext}>How are you today?</Text>
+          </View>
+          <TouchableOpacity onPress={() => setAlertVisible(true)}>
+            <MaterialIcons name="notifications-none" size={moderateScale(28)} color={COLORS.accent} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Carousel */}
+        <View style={styles.carouselContainer}>
+          <ScrollView
+            ref={carouselRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+          >
+            {/* Slide 1: Monthly Income */}
+            <View style={styles.carouselCard}>
+              <Text style={styles.cardTitle}>Monthly Income</Text>
+              <Text style={styles.amount} adjustsFontSizeToFit numberOfLines={1}>₱ {budgetData.monthlyIncome.toLocaleString()}</Text>
+              <View style={styles.row}>
+                <Text style={styles.change}>Ready to budget</Text>
+                <TouchableOpacity style={styles.actionButton} onPress={() => scrollToSlide(1)}>
+                  <Text style={styles.actionButtonText}>See Emergency Fund</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Slide 2: Emergency Fund */}
+            <View style={styles.carouselCard}>
+              <Text style={styles.cardTitle}>Emergency Fund</Text>
+              <Text style={styles.amount} adjustsFontSizeToFit numberOfLines={1}>₱ {emergencyFund.currentSavings.toLocaleString()}</Text>
+              <Text style={styles.subtext}>Goal: ₱ {emergencyFund.targetAmount.toLocaleString()}</Text>
+              <View style={styles.row}>
+                <View />
+                <TouchableOpacity style={[styles.actionButton, { backgroundColor: COLORS.primary }]} onPress={() => scrollToSlide(2)}>
+                  <Text style={styles.actionButtonText}>See Savings Rate</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Slide 3: Savings Rate */}
+            <View style={styles.carouselCard}>
+              <Text style={styles.cardTitle}>Savings Rate</Text>
+              <Text style={styles.amount} adjustsFontSizeToFit numberOfLines={1}>{savingsRate}%</Text>
+              <Text style={styles.subtext}>of Monthly Income</Text>
+              <View style={styles.row}>
+                <View />
+                <TouchableOpacity style={[styles.actionButton, { backgroundColor: COLORS.primary }]} onPress={() => scrollToSlide(0)}>
+                  <Text style={styles.actionButtonText}>Back to Monthly Income</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
+        </View>
+
+        {/* Budget Allocation Chart */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Budget Allocation</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <BarChart
+              data={{
+                labels: spendingLabels.map(l => l.substring(0, 3)),
+                datasets: [{ data: spendingValues }],
+              }}
+              width={screenWidth - scale(60)}
+              height={verticalScale(220)}
+              yAxisLabel="₱"
+              chartConfig={chartConfig}
+              verticalLabelRotation={0}
+              showValuesOnTopOfBars
+              fromZero
+            />
+          </ScrollView>
+        </View>
+
+        {/* Spending Trend */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Spending Trend</Text>
+          <Text style={styles.subtext}>Last 6 months overview</Text>
+          <LineChart
+            data={{
+              labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+              datasets: [{ data: [2000, 4500, 2800, 8000, 9900, 4300] }],
+            }}
+            width={screenWidth - scale(60)}
+            height={verticalScale(220)}
+            chartConfig={{
+              ...chartConfig,
+              color: (opacity = 1) => `rgba(227, 130, 60, ${opacity})`,
+            }}
+            bezier
+            style={{
+              marginVertical: verticalScale(8),
+              borderRadius: moderateScale(16),
+            }}
+          />
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: COLORS.background,
+  },
+  center: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  content: {
+    flexGrow: 1,
+    padding: scale(20),
+    paddingBottom: verticalScale(120),
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: verticalScale(24),
   },
   greeting: {
-    fontSize: 24,
+    fontSize: moderateScale(24),
     fontWeight: 'bold',
-    marginBottom: 4,
+    fontFamily: 'Poppins-Bold',
+    color: COLORS.text,
   },
   subtext: {
-    fontSize: 16,
-    color: '#555',
-    marginBottom: 20,
+    fontSize: moderateScale(14),
+    fontFamily: 'Poppins-Regular',
+    color: COLORS.textSecondary,
+  },
+  text: {
+    color: COLORS.text,
+    fontSize: moderateScale(16),
+    fontFamily: 'Poppins-Regular',
   },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
+    backgroundColor: COLORS.cardBg,
+    borderRadius: moderateScale(20),
+    padding: scale(20),
+    marginBottom: verticalScale(20),
     shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: verticalScale(4) },
+    shadowOpacity: 0.3,
+    shadowRadius: moderateScale(8),
+    elevation: 5,
   },
-  sectionTitle: {
-    fontSize: 18,
+  carouselContainer: {
+    height: verticalScale(200),
+    marginBottom: verticalScale(20),
+  },
+  carouselCard: {
+    backgroundColor: COLORS.cardBg,
+    borderRadius: moderateScale(20),
+    padding: scale(20),
+    width: screenWidth - scale(40),
+    marginRight: 0,
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: verticalScale(4) },
+    shadowOpacity: 0.3,
+    shadowRadius: moderateScale(8),
+    elevation: 5,
+  },
+  cardTitle: {
+    fontSize: moderateScale(16),
+    color: COLORS.yellow,
     fontWeight: '600',
-    marginBottom: 8,
+    fontFamily: 'Poppins-SemiBold',
+    marginBottom: verticalScale(8),
   },
   amount: {
-    fontSize: 28,
+    fontSize: moderateScale(32),
     fontWeight: 'bold',
-    color: '#007AFF',
+    fontFamily: 'Poppins-Bold',
+    color: COLORS.text,
+    marginBottom: verticalScale(4),
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: verticalScale(12),
   },
   change: {
-    fontSize: 14,
-    color: '#888',
-    marginBottom: 12,
+    color: COLORS.textSecondary,
+    fontSize: moderateScale(14),
+    fontFamily: 'Poppins-Regular',
   },
-  button: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
+  actionButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(8),
+    borderRadius: moderateScale(12),
   },
-  buttonText: {
-    color: '#fff',
+  actionButtonText: {
+    color: COLORS.text,
+    fontSize: moderateScale(12),
     fontWeight: '600',
+    fontFamily: 'Poppins-SemiBold',
   },
-  status: {
-    fontSize: 16,
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#2A265C',
+    borderRadius: moderateScale(20),
+    padding: scale(24),
+    width: '85%',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: verticalScale(10) },
+    shadowOpacity: 0.5,
+    shadowRadius: moderateScale(20),
+    elevation: 10,
+  },
+  modalTitle: {
+    fontSize: moderateScale(22),
     fontWeight: 'bold',
-    color: '#28A745',
+    fontFamily: 'Poppins-Bold',
+    color: COLORS.yellow,
+    marginBottom: verticalScale(16),
   },
-  usage: {
-    fontSize: 14,
-    color: '#555',
+  modalText: {
+    fontSize: moderateScale(16),
+    fontFamily: 'Poppins-Regular',
+    color: COLORS.text,
+    textAlign: 'center',
+    marginBottom: verticalScale(24),
+    lineHeight: verticalScale(24),
+  },
+  modalButton: {
+    alignSelf: 'flex-end',
+  },
+  modalButtonText: {
+    color: COLORS.yellow,
+    fontSize: moderateScale(18),
+    fontWeight: 'bold',
+    fontFamily: 'Poppins-Bold',
   },
 });
 
