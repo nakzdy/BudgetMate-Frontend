@@ -3,6 +3,9 @@ import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert 
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { scale, verticalScale, moderateScale } from '../src/responsive';
 
 // ============================================
 // CONSTANTS
@@ -19,7 +22,7 @@ const COLORS = {
 
 const CATEGORIES = [
   'Entertainment',
-  'Transportation', 
+  'Transportation',
   'Food',
   'Utilities',
   'Others'
@@ -35,10 +38,10 @@ export default function BudgetOnboarding() {
     { id: 1, name: '', targetAmount: '', currentSavings: '' }
   ]);
   const [spendingPreferences, setSpendingPreferences] = useState(
-    CATEGORIES.map(cat => ({ 
-      category: cat, 
-      percentage: '', 
-      fixedAmount: '' 
+    CATEGORIES.map(cat => ({
+      category: cat,
+      percentage: '',
+      fixedAmount: ''
     }))
   );
   const [errors, setErrors] = useState({});
@@ -68,7 +71,7 @@ export default function BudgetOnboarding() {
   };
 
   const updateGoal = (id, field, value) => {
-    setSavingsGoals(savingsGoals.map(goal => 
+    setSavingsGoals(savingsGoals.map(goal =>
       goal.id === id ? { ...goal, [field]: value } : goal
     ));
     // Clear error for this field when user types
@@ -147,10 +150,12 @@ export default function BudgetOnboarding() {
     setIsSubmitting(true);
 
     try {
+      await AsyncStorage.setItem('userBudget', JSON.stringify(data));
       Alert.alert('Success', 'Budget preferences saved successfully!');
       router.replace('/(tabs)/home');
-    } catch (navErr) {
-      console.warn('Navigation error:', navErr);
+    } catch (error) {
+      console.error('Error saving budget:', error);
+      Alert.alert('Error', 'Failed to save budget data');
     } finally {
       setIsSubmitting(false);
     }
@@ -160,10 +165,10 @@ export default function BudgetOnboarding() {
   // RENDER UI
   // ============================================
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
-      
-      <ScrollView 
+
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -178,7 +183,7 @@ export default function BudgetOnboarding() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Monthly Income</Text>
           <View style={[
-            styles.inputContainer, 
+            styles.inputContainer,
             errors.monthlyIncome && styles.inputError
           ]}>
             <Text style={styles.currencyPrefix}>₱</Text>
@@ -208,7 +213,7 @@ export default function BudgetOnboarding() {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Savings Goals</Text>
             <TouchableOpacity onPress={addGoal} style={styles.addButton}>
-              <MaterialIcons name="add" size={16} color={COLORS.text} />
+              <MaterialIcons name="add" size={moderateScale(16)} color={COLORS.text} />
               <Text style={styles.addButtonText}>Add Goal</Text>
             </TouchableOpacity>
           </View>
@@ -219,7 +224,7 @@ export default function BudgetOnboarding() {
                 <Text style={styles.goalNumber}>Goal {index + 1}</Text>
                 {savingsGoals.length > 1 && (
                   <TouchableOpacity onPress={() => removeGoal(goal.id)}>
-                    <MaterialIcons name="close" size={20} color={COLORS.accent} />
+                    <MaterialIcons name="close" size={moderateScale(20)} color={COLORS.accent} />
                   </TouchableOpacity>
                 )}
               </View>
@@ -302,7 +307,7 @@ export default function BudgetOnboarding() {
           {spendingPreferences.map((pref) => (
             <View key={pref.category} style={styles.preferenceCard}>
               <Text style={styles.categoryName}>{pref.category}</Text>
-              
+
               <View style={styles.row}>
                 <View style={styles.halfInput}>
                   <Text style={styles.label}>Percentage of Income</Text>
@@ -313,7 +318,7 @@ export default function BudgetOnboarding() {
                       placeholderTextColor="#8B86B8"
                       keyboardType="numeric"
                       value={pref.percentage}
-                      onChangeText={(text) => 
+                      onChangeText={(text) =>
                         updateSpendingPreference(pref.category, 'percentage', text)
                       }
                     />
@@ -331,7 +336,7 @@ export default function BudgetOnboarding() {
                       placeholderTextColor="#8B86B8"
                       keyboardType="numeric"
                       value={pref.fixedAmount}
-                      onChangeText={(text) => 
+                      onChangeText={(text) =>
                         updateSpendingPreference(pref.category, 'fixedAmount', text)
                       }
                     />
@@ -343,8 +348,8 @@ export default function BudgetOnboarding() {
         </View>
 
         {/* Submit Button */}
-        <TouchableOpacity 
-          style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]} 
+        <TouchableOpacity
+          style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
           onPress={handleSubmit}
           disabled={isSubmitting}
         >
@@ -353,7 +358,7 @@ export default function BudgetOnboarding() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -367,51 +372,51 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 40,
+    paddingHorizontal: scale(20),
+    paddingTop: verticalScale(20),
+    paddingBottom: verticalScale(40),
   },
   header: {
-    marginBottom: 32,
+    marginBottom: verticalScale(32),
   },
   mainTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontSize: moderateScale(28),
+    fontFamily: 'Poppins-Bold',
     color: COLORS.text,
-    marginBottom: 8,
+    marginBottom: verticalScale(8),
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     color: COLORS.textSecondary,
   },
   section: {
-    marginBottom: 32,
+    marginBottom: verticalScale(32),
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: verticalScale(16),
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: moderateScale(20),
+    fontFamily: 'Poppins-SemiBold',
     color: COLORS.yellow,
-    marginBottom: 16,
+    marginBottom: verticalScale(16),
   },
   sectionSubtitle: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     color: COLORS.textSecondary,
-    marginTop: -12,
-    marginBottom: 16,
+    marginTop: verticalScale(-12),
+    marginBottom: verticalScale(16),
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.cardBg,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    height: 56,
+    borderRadius: moderateScale(12),
+    paddingHorizontal: scale(16),
+    height: verticalScale(56),
     borderWidth: 2,
     borderColor: 'transparent',
   },
@@ -419,107 +424,108 @@ const styles = StyleSheet.create({
     borderColor: COLORS.accent,
   },
   goalInputContainer: {
-    marginBottom: 8,
+    marginBottom: verticalScale(8),
   },
   currencyPrefix: {
-    fontSize: 18,
+    fontSize: moderateScale(18),
     color: COLORS.text,
-    marginRight: 8,
-    fontWeight: '600',
+    marginRight: scale(8),
+    fontFamily: 'Poppins-SemiBold',
   },
   percentSign: {
-    fontSize: 18,
+    fontSize: moderateScale(18),
     color: COLORS.text,
-    marginLeft: 8,
-    fontWeight: '600',
+    marginLeft: scale(8),
+    fontFamily: 'Poppins-SemiBold',
   },
   input: {
     flex: 1,
     color: COLORS.text,
-    fontSize: 16,
+    fontSize: moderateScale(16),
     height: '100%',
   },
   inputSmall: {
-    fontSize: 15,
+    fontSize: moderateScale(15),
   },
   errorText: {
     color: COLORS.accent,
-    fontSize: 13,
-    marginTop: 6,
-    marginLeft: 4,
+    fontSize: moderateScale(13),
+    marginTop: verticalScale(6),
+    marginLeft: scale(4),
   },
   errorTextSmall: {
     color: COLORS.accent,
-    fontSize: 11,
-    marginTop: 4,
+    fontSize: moderateScale(11),
+    marginTop: verticalScale(4),
   },
   addButton: {
     backgroundColor: COLORS.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: scale(16),
+    paddingVertical: verticalScale(8),
+    borderRadius: moderateScale(20),
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: scale(4),
   },
   addButtonText: {
     color: COLORS.text,
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: moderateScale(14),
+    fontFamily: 'Poppins-SemiBold',
+
   },
   goalCard: {
     backgroundColor: COLORS.cardBg,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
+    borderRadius: moderateScale(16),
+    padding: scale(16),
+    marginBottom: verticalScale(16),
   },
   goalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: verticalScale(12),
   },
   goalNumber: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: moderateScale(16),
+    fontFamily: 'Poppins-SemiBold',
     color: COLORS.yellow,
   },
   label: {
-    fontSize: 13,
+    fontSize: moderateScale(13),
     color: COLORS.textSecondary,
-    marginBottom: 8,
+    marginBottom: verticalScale(8),
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: scale(12),
   },
   halfInput: {
     flex: 1,
   },
   preferenceCard: {
     backgroundColor: COLORS.cardBg,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: moderateScale(12),
+    padding: scale(16),
+    marginBottom: verticalScale(12),
   },
   categoryName: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: moderateScale(16),
+    fontFamily: 'Poppins-SemiBold',
     color: COLORS.text,
-    marginBottom: 12,
+    marginBottom: verticalScale(12),
   },
   submitButton: {
     backgroundColor: COLORS.primary,
-    borderRadius: 12,
-    height: 56,
+    borderRadius: moderateScale(12),
+    height: verticalScale(56),
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: verticalScale(16),
     shadowColor: '#000',
-    shadowOffset: { width: 2, height: 5 },
+    shadowOffset: { width: 2, height: verticalScale(5) },
     shadowOpacity: 0.3,
-    shadowRadius: 6,
+    shadowRadius: moderateScale(6),
     elevation: 10,
   },
   submitButtonDisabled: {
@@ -527,7 +533,7 @@ const styles = StyleSheet.create({
   },
   submitButtonText: {
     color: COLORS.text,
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: moderateScale(18),
+    fontFamily: 'Poppins-SemiBold',
   },
 });
