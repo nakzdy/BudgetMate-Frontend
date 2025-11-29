@@ -1,539 +1,326 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Image, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { scale, verticalScale, moderateScale } from '../src/responsive';
+import { moderateScale } from '../src/responsive';
+import { styles, COLORS } from './_styles/BudgetOnboarding.styles';
 
-// ============================================
-// CONSTANTS
-// ============================================
-const COLORS = {
-  background: '#141326',
-  cardBg: '#433DA3',
-  primary: '#E3823C',
-  accent: '#E33C3C',
-  text: '#FFFFFF',
-  textSecondary: '#D7C7EC',
-  yellow: '#FFC107'
-};
-
-const CATEGORIES = [
-  'Entertainment',
-  'Transportation',
+// List of spending categories
+const SPENDING_CATEGORIES = [
+  'Housing',
   'Food',
+  'Transportation',
   'Utilities',
-  'Others'
+  'Entertainment',
+  'Healthcare',
+  'Shopping',
+  'Subscription',
 ];
 
-// ============================================
-// MAIN COMPONENT
-// ============================================
 export default function BudgetOnboarding() {
-  // State Management
-  const [monthlyIncome, setMonthlyIncome] = useState('');
-  const [savingsGoals, setSavingsGoals] = useState([
-    { id: 1, name: '', targetAmount: '', currentSavings: '' }
-  ]);
-  const [spendingPreferences, setSpendingPreferences] = useState(
-    CATEGORIES.map(cat => ({
-      category: cat,
-      percentage: '',
-      fixedAmount: ''
-    }))
-  );
-  const [errors, setErrors] = useState({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
 
-  // ============================================
-  // GOAL MANAGEMENT FUNCTIONS
-  // ============================================
-  const addGoal = () => {
-    setSavingsGoals([
-      ...savingsGoals,
-      { id: Date.now(), name: '', targetAmount: '', currentSavings: '' }
-    ]);
-  };
+  // Track which step we're on (1, 2, 3, or 4)
+  const [step, setStep] = useState(1);
 
-  const removeGoal = (id) => {
-    if (savingsGoals.length > 1) {
-      setSavingsGoals(savingsGoals.filter(goal => goal.id !== id));
-      // Clear errors for removed goal
-      const newErrors = { ...errors };
-      delete newErrors[`goal_${id}_name`];
-      delete newErrors[`goal_${id}_targetAmount`];
-      delete newErrors[`goal_${id}_currentSavings`];
-      setErrors(newErrors);
-    }
-  };
+  // Store all the form data
+  const [income, setIncome] = useState('');
+  const [frequency, setFrequency] = useState('');
+  const [categories, setCategories] = useState([]);
+  const [savingsRate, setSavingsRate] = useState('');
+  const [emergencyGoal, setEmergencyGoal] = useState('');
+  const [annualGoal, setAnnualGoal] = useState('');
 
-  const updateGoal = (id, field, value) => {
-    setSavingsGoals(savingsGoals.map(goal =>
-      goal.id === id ? { ...goal, [field]: value } : goal
-    ));
-    // Clear error for this field when user types
-    if (errors[`goal_${id}_${field}`]) {
-      const newErrors = { ...errors };
-      delete newErrors[`goal_${id}_${field}`];
-      setErrors(newErrors);
-    }
-  };
-
-  const updateSpendingPreference = (category, field, value) => {
-    setSpendingPreferences(spendingPreferences.map(pref =>
-      pref.category === category ? { ...pref, [field]: value } : pref
-    ));
-  };
-
-  // ============================================
-  // VALIDATION LOGIC
-  // ============================================
-  const validateForm = () => {
-    const newErrors = {};
-
-    // Validate monthly income
-    if (!monthlyIncome || monthlyIncome.trim() === '') {
-      newErrors.monthlyIncome = 'Monthly income is required';
-    } else if (isNaN(parseFloat(monthlyIncome))) {
-      newErrors.monthlyIncome = 'Please enter a valid number';
-    }
-
-    // Validate savings goals
-    savingsGoals.forEach((goal) => {
-      if (!goal.name || goal.name.trim() === '') {
-        newErrors[`goal_${goal.id}_name`] = 'Goal name is required';
+  // Go to next step
+  function nextStep() {
+    // Validate step 2
+    if (step === 2) {
+      if (!income || parseFloat(income) <= 0) {
+        Alert.alert('Required Field', 'Please enter your monthly income');
+        return;
       }
-      if (!goal.targetAmount || goal.targetAmount.trim() === '') {
-        newErrors[`goal_${goal.id}_targetAmount`] = 'Target amount is required';
-      } else if (isNaN(parseFloat(goal.targetAmount))) {
-        newErrors[`goal_${goal.id}_targetAmount`] = 'Please enter a valid number';
+      if (!frequency) {
+        Alert.alert('Required Field', 'Please select how often you get paid');
+        return;
       }
-      if (!goal.currentSavings || goal.currentSavings.trim() === '') {
-        newErrors[`goal_${goal.id}_currentSavings`] = 'Current savings is required';
-      } else if (isNaN(parseFloat(goal.currentSavings))) {
-        newErrors[`goal_${goal.id}_currentSavings`] = 'Please enter a valid number';
-      }
-    });
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  // ============================================
-  // API SUBMISSION HANDLER
-  // ============================================
-  const handleSubmit = async () => {
-    // Validate form
-    if (!validateForm()) {
-      Alert.alert('Validation Error', 'Please fill in all required fields correctly.');
-      return;
     }
 
-    // Prepare data
-    const data = {
-      monthlyIncome: parseFloat(monthlyIncome),
-      savingsGoals: savingsGoals.map(goal => ({
-        name: goal.name,
-        targetAmount: parseFloat(goal.targetAmount),
-        currentSavings: parseFloat(goal.currentSavings)
-      })),
-      spendingPreferences: spendingPreferences.map(pref => ({
-        category: pref.category,
-        percentage: pref.percentage ? parseFloat(pref.percentage) : null,
-        fixedAmount: pref.fixedAmount ? parseFloat(pref.fixedAmount) : null
-      }))
+    if (step < 4) {
+      setStep(step + 1);
+    }
+  }
+
+  // Go to previous step
+  function previousStep() {
+    if (step > 1) {
+      setStep(step - 1);
+    }
+  }
+
+  // Toggle category selection
+  function toggleCategory(category) {
+    if (categories.includes(category)) {
+      setCategories(categories.filter(c => c !== category));
+    } else {
+      setCategories([...categories, category]);
+    }
+  }
+
+  // Calculate savings estimate
+  function calculateSavings() {
+    const incomeValue = parseFloat(income);
+    const rateValue = parseFloat(savingsRate);
+
+    if (incomeValue && rateValue && incomeValue > 0 && rateValue > 0) {
+      const estimate = (incomeValue * rateValue) / 100;
+      return `That's ₱${estimate.toLocaleString()} per month`;
+    }
+
+    return 'Enter income and rate to see estimate';
+  }
+
+  // Save data and finish
+  async function finishOnboarding() {
+    const budgetData = {
+      monthlyIncome: parseFloat(income) || 0,
+      paymentFrequency: frequency,
+      spendingCategories: categories,
+      targetSavingsRate: parseFloat(savingsRate) || 0,
+      emergencyFundGoal: parseFloat(emergencyGoal) || 0,
+      annualSavingsGoal: parseFloat(annualGoal) || 0,
     };
 
-    setIsSubmitting(true);
-
     try {
-      await AsyncStorage.setItem('userBudget', JSON.stringify(data));
-      Alert.alert('Success', 'Budget preferences saved successfully!');
+      await AsyncStorage.setItem('userBudget', JSON.stringify(budgetData));
       router.replace('/(tabs)/home');
     } catch (error) {
-      console.error('Error saving budget:', error);
+      console.error('Error saving budget data:', error);
       Alert.alert('Error', 'Failed to save budget data');
-    } finally {
-      setIsSubmitting(false);
     }
-  };
+  }
 
-  // ============================================
-  // RENDER UI
-  // ============================================
+  // Render radio button
+  function RadioButton({ label }) {
+    const isSelected = frequency === label;
+
+    return (
+      <TouchableOpacity
+        style={[styles.radioButton, isSelected && styles.radioButtonSelected]}
+        onPress={() => setFrequency(label)}
+      >
+        <View style={styles.radioCircle}>
+          {isSelected && <View style={styles.radioCircleInner} />}
+        </View>
+        <Text style={[styles.radioText, isSelected && styles.radioTextSelected]}>
+          {label}
+        </Text>
+      </TouchableOpacity>
+    );
+  }
+
+  // Render category button
+  function CategoryButton({ label }) {
+    const isSelected = categories.includes(label);
+
+    return (
+      <TouchableOpacity
+        style={[styles.categoryButton, isSelected && styles.categoryButtonSelected]}
+        onPress={() => toggleCategory(label)}
+      >
+        <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+          {isSelected && (
+            <MaterialIcons name="check" size={moderateScale(16)} color={COLORS.text} />
+          )}
+        </View>
+        <Text style={[styles.categoryText, isSelected && styles.categoryTextSelected]}>
+          {label}
+        </Text>
+      </TouchableOpacity>
+    );
+  }
+
+  // Render navigation buttons
+  function NavigationButtons() {
+    return (
+      <View style={styles.navigationButtons}>
+        <TouchableOpacity style={styles.backButton} onPress={previousStep}>
+          <Text style={styles.backButtonText}>Back</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.nextButton} onPress={nextStep}>
+          <Text style={styles.nextButtonText}>Next</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // STEP 1: Welcome Screen
+  if (step === 1) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar style="light" />
+        <View style={styles.stepContainer}>
+          <View style={styles.welcomeContent}>
+            <Text style={styles.welcomeText}>Welcome to</Text>
+            <Image
+              source={require('../assets/images/Logo.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+          </View>
+
+          <TouchableOpacity style={styles.getStartedButton} onPress={nextStep}>
+            <Text style={styles.getStartedButtonText}>Get Started</Text>
+            <MaterialIcons name="arrow-forward" size={moderateScale(20)} color={COLORS.text} />
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // STEP 2: Monthly Income
+  if (step === 2) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar style="light" />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.stepContainer}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.heading}>How much is your Monthly Income?</Text>
+              <Text style={styles.subtitle}>This helps us create a personalized budget for you</Text>
+
+              <Text style={styles.label}>Monthly Income</Text>
+              <View style={styles.inputContainer}>
+                <Text style={styles.currencyPrefix}>₱</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="20000"
+                  placeholderTextColor="#8B86B8"
+                  keyboardType="numeric"
+                  value={income}
+                  onChangeText={setIncome}
+                />
+              </View>
+
+              <Text style={styles.subheading}>How often do you get paid?</Text>
+
+              <RadioButton label="Weekly" />
+              <RadioButton label="Bi-weekly" />
+              <RadioButton label="Monthly" />
+            </ScrollView>
+
+            <NavigationButtons />
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    );
+  }
+
+  // STEP 3: Spending Categories
+  if (step === 3) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar style="light" />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.stepContainer}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <MaterialIcons name="pie-chart" size={moderateScale(40)} color={COLORS.accentGold} />
+
+              <Text style={styles.heading}>What do you Spend on?</Text>
+              <Text style={styles.subtitle}>Select your primary spending categories</Text>
+              <Text style={styles.label}>Spending Categories</Text>
+
+              <View style={styles.categoriesGrid}>
+                {SPENDING_CATEGORIES.map((category) => (
+                  <CategoryButton key={category} label={category} />
+                ))}
+              </View>
+
+              <Text style={styles.label}>Target Savings Rate (% of Income)</Text>
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="10"
+                  placeholderTextColor="#8B86B8"
+                  keyboardType="numeric"
+                  value={savingsRate}
+                  onChangeText={setSavingsRate}
+                />
+                <Text style={styles.percentSign}>%</Text>
+              </View>
+
+              <Text style={styles.helperText}>{calculateSavings()}</Text>
+            </ScrollView>
+
+            <NavigationButtons />
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    );
+  }
+
+  // STEP 4: Financial Goals
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
-
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.mainTitle}>Setup Your Budget</Text>
-          <Text style={styles.subtitle}>Let's personalize your financial journey</Text>
-        </View>
+        <View style={styles.stepContainer}>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <MaterialIcons name="track-changes" size={moderateScale(40)} color={COLORS.accentGold} />
 
-        {/* Monthly Income Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Monthly Income</Text>
-          <View style={[
-            styles.inputContainer,
-            errors.monthlyIncome && styles.inputError
-          ]}>
-            <Text style={styles.currencyPrefix}>₱</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your monthly income"
-              placeholderTextColor="#8B86B8"
-              keyboardType="numeric"
-              value={monthlyIncome}
-              onChangeText={(text) => {
-                setMonthlyIncome(text);
-                if (errors.monthlyIncome) {
-                  const newErrors = { ...errors };
-                  delete newErrors.monthlyIncome;
-                  setErrors(newErrors);
-                }
-              }}
-            />
-          </View>
-          {errors.monthlyIncome && (
-            <Text style={styles.errorText}>{errors.monthlyIncome}</Text>
-          )}
-        </View>
+            <Text style={styles.heading}>Set your Financial Goals</Text>
+            <Text style={styles.subtitle}>What are you saving for?</Text>
 
-        {/* Savings Goals Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Savings Goals</Text>
-            <TouchableOpacity onPress={addGoal} style={styles.addButton}>
-              <MaterialIcons name="add" size={moderateScale(16)} color={COLORS.text} />
-              <Text style={styles.addButtonText}>Add Goal</Text>
+            <Text style={styles.label}>Emergency Fund Goal</Text>
+            <View style={styles.inputContainer}>
+              <Text style={styles.currencyPrefix}>₱</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="10000"
+                placeholderTextColor="#8B86B8"
+                keyboardType="numeric"
+                value={emergencyGoal}
+                onChangeText={setEmergencyGoal}
+              />
+            </View>
+            <Text style={styles.helperText}>Typically 3-6 months of expenses</Text>
+
+            <Text style={styles.label}>Annual Savings Goal</Text>
+            <View style={styles.inputContainer}>
+              <Text style={styles.currencyPrefix}>₱</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="15000"
+                placeholderTextColor="#8B86B8"
+                keyboardType="numeric"
+                value={annualGoal}
+                onChangeText={setAnnualGoal}
+              />
+            </View>
+            <Text style={styles.helperText}>Your target amount to save in a year</Text>
+          </ScrollView>
+
+          <View style={styles.navigationButtons}>
+            <TouchableOpacity style={styles.backButton} onPress={previousStep}>
+              <Text style={styles.backButtonText}>Back</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.doneButton} onPress={finishOnboarding}>
+              <Text style={styles.nextButtonText}>Done</Text>
             </TouchableOpacity>
           </View>
-
-          {savingsGoals.map((goal, index) => (
-            <View key={goal.id} style={styles.goalCard}>
-              <View style={styles.goalHeader}>
-                <Text style={styles.goalNumber}>Goal {index + 1}</Text>
-                {savingsGoals.length > 1 && (
-                  <TouchableOpacity onPress={() => removeGoal(goal.id)}>
-                    <MaterialIcons name="close" size={moderateScale(20)} color={COLORS.accent} />
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              <View style={[
-                styles.inputContainer,
-                styles.goalInputContainer,
-                errors[`goal_${goal.id}_name`] && styles.inputError
-              ]}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Goal name (e.g., Dream Car)"
-                  placeholderTextColor="#8B86B8"
-                  value={goal.name}
-                  onChangeText={(text) => updateGoal(goal.id, 'name', text)}
-                />
-              </View>
-              {errors[`goal_${goal.id}_name`] && (
-                <Text style={styles.errorText}>{errors[`goal_${goal.id}_name`]}</Text>
-              )}
-
-              <View style={styles.row}>
-                <View style={styles.halfInput}>
-                  <Text style={styles.label}>Target Amount</Text>
-                  <View style={[
-                    styles.inputContainer,
-                    errors[`goal_${goal.id}_targetAmount`] && styles.inputError
-                  ]}>
-                    <Text style={styles.currencyPrefix}>₱</Text>
-                    <TextInput
-                      style={[styles.input, styles.inputSmall]}
-                      placeholder="10,000"
-                      placeholderTextColor="#8B86B8"
-                      keyboardType="numeric"
-                      value={goal.targetAmount}
-                      onChangeText={(text) => updateGoal(goal.id, 'targetAmount', text)}
-                    />
-                  </View>
-                  {errors[`goal_${goal.id}_targetAmount`] && (
-                    <Text style={styles.errorTextSmall}>
-                      {errors[`goal_${goal.id}_targetAmount`]}
-                    </Text>
-                  )}
-                </View>
-
-                <View style={styles.halfInput}>
-                  <Text style={styles.label}>Current Savings</Text>
-                  <View style={[
-                    styles.inputContainer,
-                    errors[`goal_${goal.id}_currentSavings`] && styles.inputError
-                  ]}>
-                    <Text style={styles.currencyPrefix}>₱</Text>
-                    <TextInput
-                      style={[styles.input, styles.inputSmall]}
-                      placeholder="4,500"
-                      placeholderTextColor="#8B86B8"
-                      keyboardType="numeric"
-                      value={goal.currentSavings}
-                      onChangeText={(text) => updateGoal(goal.id, 'currentSavings', text)}
-                    />
-                  </View>
-                  {errors[`goal_${goal.id}_currentSavings`] && (
-                    <Text style={styles.errorTextSmall}>
-                      {errors[`goal_${goal.id}_currentSavings`]}
-                    </Text>
-                  )}
-                </View>
-              </View>
-            </View>
-          ))}
         </View>
-
-        {/* Spending Preferences Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Spending Preferences</Text>
-          <Text style={styles.sectionSubtitle}>
-            Set limits for each category (optional)
-          </Text>
-
-          {spendingPreferences.map((pref) => (
-            <View key={pref.category} style={styles.preferenceCard}>
-              <Text style={styles.categoryName}>{pref.category}</Text>
-
-              <View style={styles.row}>
-                <View style={styles.halfInput}>
-                  <Text style={styles.label}>Percentage of Income</Text>
-                  <View style={styles.inputContainer}>
-                    <TextInput
-                      style={[styles.input, styles.inputSmall]}
-                      placeholder="20"
-                      placeholderTextColor="#8B86B8"
-                      keyboardType="numeric"
-                      value={pref.percentage}
-                      onChangeText={(text) =>
-                        updateSpendingPreference(pref.category, 'percentage', text)
-                      }
-                    />
-                    <Text style={styles.percentSign}>%</Text>
-                  </View>
-                </View>
-
-                <View style={styles.halfInput}>
-                  <Text style={styles.label}>Fixed Amount</Text>
-                  <View style={styles.inputContainer}>
-                    <Text style={styles.currencyPrefix}>₱</Text>
-                    <TextInput
-                      style={[styles.input, styles.inputSmall]}
-                      placeholder="5,000"
-                      placeholderTextColor="#8B86B8"
-                      keyboardType="numeric"
-                      value={pref.fixedAmount}
-                      onChangeText={(text) =>
-                        updateSpendingPreference(pref.category, 'fixedAmount', text)
-                      }
-                    />
-                  </View>
-                </View>
-              </View>
-            </View>
-          ))}
-        </View>
-
-        {/* Submit Button */}
-        <TouchableOpacity
-          style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
-          onPress={handleSubmit}
-          disabled={isSubmitting}
-        >
-          <Text style={styles.submitButtonText}>
-            {isSubmitting ? 'Saving...' : 'Continue'}
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
-
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: scale(20),
-    paddingTop: verticalScale(20),
-    paddingBottom: verticalScale(40),
-  },
-  header: {
-    marginBottom: verticalScale(32),
-  },
-  mainTitle: {
-    fontSize: moderateScale(28),
-    fontFamily: 'Poppins-Bold',
-    color: COLORS.text,
-    marginBottom: verticalScale(8),
-  },
-  subtitle: {
-    fontSize: moderateScale(16),
-    color: COLORS.textSecondary,
-  },
-  section: {
-    marginBottom: verticalScale(32),
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: verticalScale(16),
-  },
-  sectionTitle: {
-    fontSize: moderateScale(20),
-    fontFamily: 'Poppins-SemiBold',
-    color: COLORS.yellow,
-    marginBottom: verticalScale(16),
-  },
-  sectionSubtitle: {
-    fontSize: moderateScale(14),
-    color: COLORS.textSecondary,
-    marginTop: verticalScale(-12),
-    marginBottom: verticalScale(16),
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.cardBg,
-    borderRadius: moderateScale(12),
-    paddingHorizontal: scale(16),
-    height: verticalScale(56),
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  inputError: {
-    borderColor: COLORS.accent,
-  },
-  goalInputContainer: {
-    marginBottom: verticalScale(8),
-  },
-  currencyPrefix: {
-    fontSize: moderateScale(18),
-    color: COLORS.text,
-    marginRight: scale(8),
-    fontFamily: 'Poppins-SemiBold',
-  },
-  percentSign: {
-    fontSize: moderateScale(18),
-    color: COLORS.text,
-    marginLeft: scale(8),
-    fontFamily: 'Poppins-SemiBold',
-  },
-  input: {
-    flex: 1,
-    color: COLORS.text,
-    fontSize: moderateScale(16),
-    height: '100%',
-  },
-  inputSmall: {
-    fontSize: moderateScale(15),
-  },
-  errorText: {
-    color: COLORS.accent,
-    fontSize: moderateScale(13),
-    marginTop: verticalScale(6),
-    marginLeft: scale(4),
-  },
-  errorTextSmall: {
-    color: COLORS.accent,
-    fontSize: moderateScale(11),
-    marginTop: verticalScale(4),
-  },
-  addButton: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: scale(16),
-    paddingVertical: verticalScale(8),
-    borderRadius: moderateScale(20),
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: scale(4),
-  },
-  addButtonText: {
-    color: COLORS.text,
-    fontSize: moderateScale(14),
-    fontFamily: 'Poppins-SemiBold',
-
-  },
-  goalCard: {
-    backgroundColor: COLORS.cardBg,
-    borderRadius: moderateScale(16),
-    padding: scale(16),
-    marginBottom: verticalScale(16),
-  },
-  goalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: verticalScale(12),
-  },
-  goalNumber: {
-    fontSize: moderateScale(16),
-    fontFamily: 'Poppins-SemiBold',
-    color: COLORS.yellow,
-  },
-  label: {
-    fontSize: moderateScale(13),
-    color: COLORS.textSecondary,
-    marginBottom: verticalScale(8),
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: scale(12),
-  },
-  halfInput: {
-    flex: 1,
-  },
-  preferenceCard: {
-    backgroundColor: COLORS.cardBg,
-    borderRadius: moderateScale(12),
-    padding: scale(16),
-    marginBottom: verticalScale(12),
-  },
-  categoryName: {
-    fontSize: moderateScale(16),
-    fontFamily: 'Poppins-SemiBold',
-    color: COLORS.text,
-    marginBottom: verticalScale(12),
-  },
-  submitButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: moderateScale(12),
-    height: verticalScale(56),
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: verticalScale(16),
-    shadowColor: '#000',
-    shadowOffset: { width: 2, height: verticalScale(5) },
-    shadowOpacity: 0.3,
-    shadowRadius: moderateScale(6),
-    elevation: 10,
-  },
-  submitButtonDisabled: {
-    opacity: 0.6,
-  },
-  submitButtonText: {
-    color: COLORS.text,
-    fontSize: moderateScale(18),
-    fontFamily: 'Poppins-SemiBold',
-  },
-});

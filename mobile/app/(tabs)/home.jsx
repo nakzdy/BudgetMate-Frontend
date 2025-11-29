@@ -1,12 +1,11 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal } from 'react-native';
 import { BarChart, LineChart } from 'react-native-chart-kit';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { scale, verticalScale, moderateScale, screenWidth } from '../../src/responsive';
 
 const COLORS = {
@@ -20,13 +19,13 @@ const COLORS = {
 };
 
 const Home = () => {
-  const [budgetData, setBudgetData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [alertVisible, setAlertVisible] = useState(false);
-  const [username, setUsername] = useState('Jo');
-  const carouselRef = useRef(null);
-  const router = useRouter();
+  const [budgetData, setBudgetData] = useState(null); // Stores the user's budget information
+  const [loading, setLoading] = useState(true); // Shows if we're still loading data
+  const [alertVisible, setAlertVisible] = useState(false); // Controls if the alert popup is shown
+  const [username, setUsername] = useState('Jo'); // Stores the user's name
+  const carouselRef = useRef(null); // Reference to the carousel for scrolling
 
+  // This runs every time the screen comes into focus
   useFocusEffect(
     useCallback(() => {
       loadBudgetData();
@@ -34,41 +33,52 @@ const Home = () => {
     }, [])
   );
 
+  // Function to load budget data from storage
   const loadBudgetData = async () => {
     try {
-      const jsonValue = await AsyncStorage.getItem('userBudget');
-      if (jsonValue != null) {
-        setBudgetData(JSON.parse(jsonValue));
+      // Get the saved budget data
+      const savedData = await AsyncStorage.getItem('userBudget');
+
+      // If we found data, convert it from text to an object
+      if (savedData != null) {
+        const budgetObject = JSON.parse(savedData);
+        setBudgetData(budgetObject);
       }
-    } catch (e) {
-      console.error('Failed to load budget data', e);
+    } catch (error) {
+      console.error('Failed to load budget data', error);
     } finally {
+      // Always stop loading, whether we succeeded or failed
       setLoading(false);
     }
   };
 
+  // Function to load user information from storage
   const loadUserData = async () => {
     try {
-      const userData = await AsyncStorage.getItem('userData');
-      if (userData != null) {
-        const user = JSON.parse(userData);
-        setUsername(user.name || user.username || 'Jo');
+      // Get the saved user data
+      const savedUserData = await AsyncStorage.getItem('userData');
+
+      // If we found data, extract the username
+      if (savedUserData != null) {
+        const userObject = JSON.parse(savedUserData);
+        const displayName = userObject.name || userObject.username || 'Jo';
+        setUsername(displayName);
       }
-    } catch (e) {
-      console.error('Failed to load user data', e);
+    } catch (error) {
+      console.error('Failed to load user data', error);
     }
   };
 
-  const scrollToSlide = (index) => {
+  // Function to scroll the carousel to a specific slide
+  const scrollToSlide = (slideNumber) => {
     if (carouselRef.current) {
-      carouselRef.current.scrollTo({ x: index * (screenWidth - scale(40)), animated: true });
+      const slideWidth = screenWidth - scale(40);
+      const scrollPosition = slideNumber * slideWidth;
+      carouselRef.current.scrollTo({ x: scrollPosition, animated: true });
     }
   };
 
-  const goToOnboarding = () => {
-    router.push('/BudgetOnboarding');
-  };
-
+  // Show loading spinner while data is being loaded
   if (loading) {
     return (
       <View style={[styles.container, styles.center]}>
@@ -77,56 +87,57 @@ const Home = () => {
     );
   }
 
+  // Show message if no budget data exists
   if (!budgetData) {
     return (
-      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-        <StatusBar style="light" backgroundColor={COLORS.background} translucent={false} />
-        <View style={[styles.container, styles.center]}>
-          <MaterialIcons name="account-balance-wallet" size={moderateScale(80)} color={COLORS.yellow} />
-          <Text style={styles.noBudgetTitle}>No Budget Data Found</Text>
-          <Text style={styles.noBudgetText}>
-            Let's set up your budget to start tracking your finances!
-          </Text>
-          
-          <TouchableOpacity 
-            style={styles.onboardingButtonWrapper}
-            onPress={goToOnboarding}
-            activeOpacity={0.8}
-          >
-            <LinearGradient
-              colors={['#E3823C', '#E33C3C']}
-              locations={[0.1, 0.95]}
-              start={{ x: 0, y: 0.5 }}
-              end={{ x: 1, y: 0.5 }}
-              style={styles.onboardingButton}
-            >
-              <Text style={styles.onboardingButtonText}>Setup Budget</Text>
-              <MaterialIcons name="arrow-forward" size={moderateScale(20)} color={COLORS.text} />
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+      <View style={[styles.container, styles.center]}>
+        <Text style={styles.text}>No budget data found.</Text>
+        <Text style={styles.subtext}>Please complete the onboarding first.</Text>
+      </View>
     );
   }
 
-  // Calculations
-  const spendingLabels = budgetData.spendingPreferences.map(p => p.category);
-  const spendingValues = budgetData.spendingPreferences.map(p => {
-    if (p.fixedAmount) return p.fixedAmount;
-    if (p.percentage) return (budgetData.monthlyIncome * p.percentage) / 100;
-    return 0;
-  });
+  // === CALCULATE DATA FOR CHARTS ===
 
-  // Find Emergency Fund or fallback
-  const emergencyFund =
-    budgetData.savingsGoals.find(g => g.name.toLowerCase().includes('emergency')) ||
-    budgetData.savingsGoals[0] ||
-    { name: 'Emergency Fund', currentSavings: 0, targetAmount: 0 };
+  // 1. Calculate Savings Amount
+  const monthlyIncome = budgetData.monthlyIncome || 0;
+  const savingsRate = budgetData.targetSavingsRate || 0;
+  const savingsAmount = (monthlyIncome * savingsRate) / 100;
 
-  // Savings Rate
-  const totalSavings = budgetData.savingsGoals.reduce((sum, goal) => sum + (goal.currentSavings || 0), 0);
-  const savingsRate = budgetData.monthlyIncome > 0 ? Math.round((totalSavings / budgetData.monthlyIncome) * 100) : 0;
+  // 2. Calculate Remaining Budget for Categories
+  const remainingBudget = monthlyIncome - savingsAmount;
 
+  // 3. Prepare Chart Data
+  // We'll split the remaining budget equally among selected categories for now
+  // as a "Suggested Allocation"
+  const categories = budgetData.spendingCategories || [];
+  const amountPerCategory = categories.length > 0 ? remainingBudget / categories.length : 0;
+
+  const categoryNames = categories;
+  const categoryAmounts = categories.map(() => amountPerCategory);
+
+  // 4. Emergency Fund Data
+  const emergencyGoal = budgetData.emergencyFundGoal || 0;
+  const currentEmergencySavings = 0; // Start at 0 for new users
+
+  // 5. Prepare Spending Trend Data (Top Category per Month)
+  // wa pa tay real data so sample rani
+
+  // Use all categories for the Y-axis mapping
+  const trendCategories = categories.length > 0 ? categories : ['None'];
+
+  // Generate dummy "Top Category Index" for 6 months
+  // This picks a random category index for each month
+  const trendDataPoints = [
+    Math.floor(Math.random() * trendCategories.length),
+    Math.floor(Math.random() * trendCategories.length),
+    Math.floor(Math.random() * trendCategories.length),
+    Math.floor(Math.random() * trendCategories.length),
+    Math.floor(Math.random() * trendCategories.length),
+    Math.floor(Math.random() * trendCategories.length),
+  ];
+
+  // Configuration for the charts
   const chartConfig = {
     backgroundColor: COLORS.cardBg,
     backgroundGradientFrom: COLORS.cardBg,
@@ -137,13 +148,19 @@ const Home = () => {
     style: { borderRadius: moderateScale(16) },
     barPercentage: 0.7,
     propsForLabels: { fontSize: moderateScale(10), fontFamily: 'Poppins-Regular' },
+    propsForDots: {
+      r: "6",
+      strokeWidth: "2",
+      stroke: COLORS.yellow
+    }
   };
 
+  // === RENDER THE SCREEN ===
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar style="light" backgroundColor={COLORS.background} translucent={false} />
 
-      {/* Budget Alert Modal */}
+      {/* Alert Modal - Shows budget warnings */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -152,11 +169,6 @@ const Home = () => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <LinearGradient
-              colors={['#433DA3', '#2B2769', '#19173D']}
-              locations={[0.1, 0.45, 0.75]}
-              style={styles.gradientFill}
-            />
             <Text style={styles.modalTitle}>Budget Alert!</Text>
             <Text style={styles.modalText}>
               You're approaching your entertainment budget limit. Consider reducing spending in this category.
@@ -169,7 +181,8 @@ const Home = () => {
       </Modal>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Header */}
+
+        {/* Header Section - Shows greeting and notification bell */}
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>Hi, {username}!</Text>
@@ -180,7 +193,7 @@ const Home = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Carousel */}
+        {/* Carousel Section - Swipeable cards showing different stats */}
         <View style={styles.carouselContainer}>
           <ScrollView
             ref={carouselRef}
@@ -188,10 +201,12 @@ const Home = () => {
             pagingEnabled
             showsHorizontalScrollIndicator={false}
           >
-            {/* Slide 1: Monthly Income */}
+            {/* Card 1: Monthly Income */}
             <View style={styles.carouselCard}>
               <Text style={styles.cardTitle}>Monthly Income</Text>
-              <Text style={styles.amount} adjustsFontSizeToFit numberOfLines={1}>₱ {budgetData.monthlyIncome.toLocaleString()}</Text>
+              <Text style={styles.amount} adjustsFontSizeToFit numberOfLines={1}>
+                ₱ {monthlyIncome.toLocaleString()}
+              </Text>
               <View style={styles.row}>
                 <Text style={styles.change}>Ready to budget</Text>
                 <TouchableOpacity style={styles.actionButton} onPress={() => scrollToSlide(1)}>
@@ -200,27 +215,39 @@ const Home = () => {
               </View>
             </View>
 
-            {/* Slide 2: Emergency Fund */}
+            {/* Card 2: Emergency Fund */}
             <View style={styles.carouselCard}>
               <Text style={styles.cardTitle}>Emergency Fund</Text>
-              <Text style={styles.amount} adjustsFontSizeToFit numberOfLines={1}>₱ {emergencyFund.currentSavings.toLocaleString()}</Text>
-              <Text style={styles.subtext}>Goal: ₱ {emergencyFund.targetAmount.toLocaleString()}</Text>
+              <Text style={styles.amount} adjustsFontSizeToFit numberOfLines={1}>
+                ₱ {currentEmergencySavings.toLocaleString()}
+              </Text>
+              <Text style={styles.subtext}>
+                Goal: ₱ {emergencyGoal.toLocaleString()}
+              </Text>
               <View style={styles.row}>
                 <View />
-                <TouchableOpacity style={[styles.actionButton, { backgroundColor: COLORS.primary }]} onPress={() => scrollToSlide(2)}>
+                <TouchableOpacity
+                  style={[styles.actionButton, { backgroundColor: COLORS.primary }]}
+                  onPress={() => scrollToSlide(2)}
+                >
                   <Text style={styles.actionButtonText}>See Savings Rate</Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* Slide 3: Savings Rate */}
+            {/* Card 3: Savings Rate */}
             <View style={styles.carouselCard}>
               <Text style={styles.cardTitle}>Savings Rate</Text>
-              <Text style={styles.amount} adjustsFontSizeToFit numberOfLines={1}>{savingsRate}%</Text>
+              <Text style={styles.amount} adjustsFontSizeToFit numberOfLines={1}>
+                {savingsRate}%
+              </Text>
               <Text style={styles.subtext}>of Monthly Income</Text>
               <View style={styles.row}>
                 <View />
-                <TouchableOpacity style={[styles.actionButton, { backgroundColor: COLORS.primary }]} onPress={() => scrollToSlide(0)}>
+                <TouchableOpacity
+                  style={[styles.actionButton, { backgroundColor: COLORS.primary }]}
+                  onPress={() => scrollToSlide(0)}
+                >
                   <Text style={styles.actionButtonText}>Back to Monthly Income</Text>
                 </TouchableOpacity>
               </View>
@@ -228,46 +255,68 @@ const Home = () => {
           </ScrollView>
         </View>
 
-        {/* Budget Allocation Chart */}
+        {/* Budget Allocation Chart - Bar chart showing spending by category */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Budget Allocation</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <BarChart
-              data={{
-                labels: spendingLabels.map(l => l.substring(0, 3)),
-                datasets: [{ data: spendingValues }],
-              }}
-              width={screenWidth - scale(60)}
-              height={verticalScale(220)}
-              yAxisLabel="₱"
-              chartConfig={chartConfig}
-              verticalLabelRotation={0}
-              showValuesOnTopOfBars
-              fromZero
-            />
-          </ScrollView>
+          <Text style={styles.cardTitle}>Suggested Allocation</Text>
+          <Text style={styles.subtext}>Based on your selected categories</Text>
+
+          {categoryNames.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <BarChart
+                data={{
+                  labels: categoryNames.map(name => name.substring(0, 3)), // Shorten names to 3 letters
+                  datasets: [{ data: categoryAmounts }],
+                }}
+                width={Math.max(screenWidth - scale(60), categoryNames.length * 60)} // Ensure enough width
+                height={verticalScale(220)}
+                yAxisLabel="₱"
+                chartConfig={chartConfig}
+                verticalLabelRotation={0}
+                showValuesOnTopOfBars
+                fromZero
+              />
+            </ScrollView>
+          ) : (
+            <Text style={[styles.text, { marginTop: 20, textAlign: 'center' }]}>
+              No categories selected
+            </Text>
+          )}
         </View>
 
-        {/* Spending Trend */}
+        {/* Spending Trend Chart - Line Chart with Categorical Y-Axis */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Spending Trend</Text>
-          <Text style={styles.subtext}>Last 6 months overview</Text>
+          <Text style={styles.cardTitle}>Top Spending Category</Text>
+          <Text style={styles.subtext}>Most spent category per month</Text>
           <LineChart
             data={{
               labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-              datasets: [{ data: [2000, 4500, 2800, 8000, 9900, 4300] }],
+              datasets: [{
+                data: trendDataPoints
+              }],
             }}
             width={screenWidth - scale(60)}
             height={verticalScale(220)}
+            yAxisInterval={1}
+            formatYLabel={(value) => {
+              // Map the index back to the category name
+              const index = Math.round(value);
+              if (index >= 0 && index < trendCategories.length) {
+                return trendCategories[index].substring(0, 5); // Limit length
+              }
+              return '';
+            }}
             chartConfig={{
               ...chartConfig,
               color: (opacity = 1) => `rgba(227, 130, 60, ${opacity})`,
+              propsForLabels: { fontSize: moderateScale(10), fontFamily: 'Poppins-Regular' },
             }}
             bezier
             style={{
               marginVertical: verticalScale(8),
               borderRadius: moderateScale(16),
             }}
+            fromZero
+            segments={trendCategories.length > 1 ? trendCategories.length - 1 : 1}
           />
         </View>
       </ScrollView>
@@ -283,7 +332,6 @@ const styles = StyleSheet.create({
   center: {
     justifyContent: 'center',
     alignItems: 'center',
-    padding: scale(20),
   },
   scrollView: {
     flex: 1,
@@ -315,48 +363,6 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(16),
     fontFamily: 'Poppins-Regular',
   },
-  
-  // No Budget Data Styles
-  noBudgetTitle: {
-    fontSize: moderateScale(24),
-    fontFamily: 'Poppins-Bold',
-    color: COLORS.text,
-    marginTop: verticalScale(24),
-    marginBottom: verticalScale(12),
-    textAlign: 'center',
-  },
-  noBudgetText: {
-    fontSize: moderateScale(16),
-    fontFamily: 'Poppins-Regular',
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    marginBottom: verticalScale(32),
-    paddingHorizontal: scale(20),
-    lineHeight: verticalScale(24),
-  },
-  onboardingButtonWrapper: {
-    width: '80%',
-    borderRadius: moderateScale(12),
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: verticalScale(4) },
-    shadowOpacity: 0.3,
-    shadowRadius: moderateScale(8),
-    elevation: 5,
-  },
-  onboardingButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: verticalScale(16),
-    gap: scale(8),
-  },
-  onboardingButtonText: {
-    color: COLORS.text,
-    fontSize: moderateScale(18),
-    fontFamily: 'Poppins-SemiBold',
-  },
-  
   card: {
     backgroundColor: COLORS.cardBg,
     borderRadius: moderateScale(20),
@@ -424,28 +430,21 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
-    width: '85%',
+    backgroundColor: '#2A265C',
     borderRadius: moderateScale(20),
     padding: scale(24),
+    width: '85%',
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: verticalScale(10) },
     shadowOpacity: 0.5,
     shadowRadius: moderateScale(20),
     elevation: 10,
-    overflow: 'hidden',
-  },
-  gradientFill: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
   },
   modalTitle: {
     fontSize: moderateScale(22),
