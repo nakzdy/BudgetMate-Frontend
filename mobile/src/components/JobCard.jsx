@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { scale, verticalScale, moderateScale } from '../responsive';
+import { scale, verticalScale, moderateScale } from '../utils/responsive';
 
 const COLORS = {
     cardBg: '#433DA3', // Purple from screenshot
@@ -88,18 +88,23 @@ const styles = StyleSheet.create({
     tagRow: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: scale(6),
+        gap: scale(8),
+        rowGap: verticalScale(8),
         marginBottom: verticalScale(16),
     },
     tag: {
         backgroundColor: COLORS.yellow,
         color: '#000',
         paddingHorizontal: scale(10),
-        paddingVertical: verticalScale(4),
+        paddingVertical: verticalScale(6),
         fontSize: moderateScale(10),
         borderRadius: moderateScale(10),
         fontFamily: 'Poppins-Bold',
         overflow: 'hidden',
+        textAlign: 'center',
+        textAlignVertical: 'center',
+        height: verticalScale(28),
+        lineHeight: moderateScale(16),
     },
     learnMoreBtn: {
         backgroundColor: COLORS.primary,

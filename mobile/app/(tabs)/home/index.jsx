@@ -1,27 +1,16 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { scale, verticalScale, moderateScale } from '../../src/responsive';
-import { api } from '../../src/api';
-import HeroCard from '../../src/components/HeroCard';
-import GoalCard from '../../src/components/GoalCard';
-import SpendingChart from '../../src/components/SpendingChart';
-import TransactionCard from '../../src/components/TransactionCard';
-
-const COLORS = {
-  background: '#141326',
-  cardBg: '#2A265C',
-  primary: '#E3823C',
-  accent: '#E33C3C',
-  text: '#FFFFFF',
-  textSecondary: '#D7C7EC',
-  yellow: '#FFC107',
-  success: '#4CAF50',
-};
+import { api } from '../../../src/api/api';
+import HeroCard from '../../../src/components/budget/HeroCard';
+import GoalCard from '../../../src/components/budget/GoalCard';
+import SpendingChart from '../../../src/components/budget/SpendingChart';
+import TransactionCard from '../../../src/components/expense/TransactionCard';
+import { styles, COLORS } from './styles';
 
 const Home = () => {
   const router = useRouter();
@@ -172,7 +161,7 @@ const Home = () => {
         <View style={styles.actionRow}>
           <TouchableOpacity
             style={[styles.actionButton, styles.primaryAction]}
-            onPress={() => router.push('/AddExpense')}
+            onPress={() => router.push('/budget/AddExpense')}
             activeOpacity={0.8}
           >
             <MaterialIcons name="add" size={24} color={COLORS.text} />
@@ -181,7 +170,7 @@ const Home = () => {
 
           <TouchableOpacity
             style={[styles.actionButton, styles.secondaryAction]}
-            onPress={() => router.push('/ExpenseHistory')}
+            onPress={() => router.push('/budget/ExpenseHistory')}
             activeOpacity={0.8}
           >
             <MaterialIcons name="history" size={24} color={COLORS.textSecondary} />
@@ -224,7 +213,7 @@ const Home = () => {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent Transactions</Text>
-            <TouchableOpacity onPress={() => router.push('/ExpenseHistory')}>
+            <TouchableOpacity onPress={() => router.push('/budget/ExpenseHistory')}>
               <Text style={styles.linkText}>View All</Text>
             </TouchableOpacity>
           </View>
@@ -242,130 +231,5 @@ const Home = () => {
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  center: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  content: {
-    padding: scale(20),
-    paddingBottom: verticalScale(100),
-  },
-
-  // Header
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: verticalScale(24),
-  },
-  dateText: {
-    fontSize: moderateScale(12),
-    fontFamily: 'Poppins-Regular',
-    color: COLORS.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  greeting: {
-    fontSize: moderateScale(24),
-    fontFamily: 'Poppins-Bold',
-    color: COLORS.text,
-  },
-  profileButton: {
-    padding: scale(4),
-  },
-  avatarPlaceholder: {
-    width: moderateScale(40),
-    height: moderateScale(40),
-    borderRadius: moderateScale(20),
-    backgroundColor: COLORS.cardBg,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.textSecondary,
-  },
-  avatarText: {
-    fontSize: moderateScale(18),
-    fontFamily: 'Poppins-Bold',
-    color: COLORS.text,
-  },
-
-  // Actions
-  actionRow: {
-    flexDirection: 'row',
-    gap: scale(16),
-    marginBottom: verticalScale(28),
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: verticalScale(14),
-    borderRadius: moderateScale(16),
-    gap: scale(8),
-  },
-  primaryAction: {
-    backgroundColor: COLORS.primary,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  secondaryAction: {
-    backgroundColor: COLORS.cardBg,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  actionText: {
-    fontSize: moderateScale(14),
-    fontFamily: 'Poppins-SemiBold',
-    color: COLORS.text,
-  },
-
-  // Goals
-  goalsRow: {
-    flexDirection: 'row',
-    gap: scale(16),
-    marginBottom: verticalScale(24),
-  },
-
-  // Sections
-  section: {
-    marginBottom: verticalScale(24),
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: verticalScale(16),
-  },
-  sectionTitle: {
-    fontSize: moderateScale(18),
-    fontFamily: 'Poppins-SemiBold',
-    color: COLORS.text,
-  },
-  linkText: {
-    fontSize: moderateScale(14),
-    fontFamily: 'Poppins-Medium',
-    color: COLORS.primary,
-  },
-  emptyText: {
-    fontSize: moderateScale(14),
-    fontFamily: 'Poppins-Regular',
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    marginTop: verticalScale(8),
-  },
-});
 
 export default Home;
