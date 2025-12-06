@@ -1,12 +1,13 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert, RefreshControl } from 'react-native';
+import React, { useState, useCallback, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Alert, RefreshControl, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { moderateScale } from '../../../src/utils/responsive';
+import { moderateScale, scale, verticalScale } from '../../../src/utils/responsive';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { api } from '../../../src/api/api';
 import { styles, COLORS } from './styles';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const CATEGORIES = [
     { id: 'all', label: 'All', color: COLORS.yellow },
@@ -22,6 +23,12 @@ const Community = () => {
     const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+
+    // Comment Modal State
+    const [commentModalVisible, setCommentModalVisible] = useState(false);
+    const [selectedPost, setSelectedPost] = useState(null);
+    const [commentText, setCommentText] = useState('');
+    const [commentLoading, setCommentLoading] = useState(false);
 
     useFocusEffect(
         useCallback(() => {
@@ -72,36 +79,37 @@ const Community = () => {
         }
     };
 
-    const handleComment = async (post) => {
-        Alert.prompt(
-            'Add Comment',
-            `Comment on "${post.title}"`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Post',
-                    onPress: async (text) => {
-                        if (!text || !text.trim()) return;
+    const openCommentModal = (post) => {
+        setSelectedPost(post);
+        setCommentText('');
+        setCommentModalVisible(true);
+    };
 
-                        try {
-                            const response = await api.post(`/api/posts/${post._id}/comment`, {
-                                text: text.trim()
-                            });
-                            setPosts(prevPosts =>
-                                prevPosts.map(p =>
-                                    p._id === post._id ? response.data : p
-                                )
-                            );
-                            Alert.alert('Success', 'Comment posted!');
-                        } catch (error) {
-                            console.error('Error posting comment:', error);
-                            Alert.alert('Error', 'Failed to post comment');
-                        }
-                    }
-                }
-            ],
-            'plain-text'
-        );
+    const submitComment = async () => {
+        if (!commentText.trim()) return;
+
+        setCommentLoading(true);
+        try {
+            const response = await api.post(`/api/posts/${selectedPost._id}/comment`, {
+                text: commentText.trim()
+            });
+
+            setPosts(prevPosts =>
+                prevPosts.map(p =>
+                    p._id === selectedPost._id ? response.data : p
+                )
+            );
+
+            setCommentModalVisible(false);
+            setCommentText('');
+            setSelectedPost(null);
+            Alert.alert('Success', 'Comment posted!');
+        } catch (error) {
+            console.error('Error posting comment:', error);
+            Alert.alert('Error', 'Failed to post comment');
+        } finally {
+            setCommentLoading(false);
+        }
     };
 
     const handleShare = (post) => {
@@ -239,7 +247,7 @@ const Community = () => {
                                     <View style={styles.postFooter}>
                                         <TouchableOpacity
                                             style={styles.engagementItem}
-                                            onPress={() => handleComment(post)}
+                                            onPress={() => openCommentModal(post)}
                                         >
                                             <MaterialIcons name="chat-bubble-outline" size={moderateScale(18)} color={COLORS.textSecondary} />
                                             <Text style={styles.engagementText}>{post.comments?.length || 0}</Text>
@@ -285,6 +293,71 @@ const Community = () => {
             >
                 <MaterialIcons name="add" size={moderateScale(28)} color={COLORS.text} />
             </TouchableOpacity>
+
+            {/* Comment Modal */}
+            <Modal
+                animationType="slide"
+                transparent={true}
+                visible={commentModalVisible}
+                onRequestClose={() => setCommentModalVisible(false)}
+            >
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === "ios" ? "padding" : "height"}
+                    style={{ flex: 1 }}
+                >
+                    <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+                        <View style={{ backgroundColor: COLORS.cardBg, padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20 }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+                                <Text style={{ color: COLORS.text, fontSize: 18, fontFamily: 'Poppins-SemiBold' }}>
+                                    Add Comment
+                                </Text>
+                                <TouchableOpacity onPress={() => setCommentModalVisible(false)}>
+                                    <MaterialIcons name="close" size={24} color={COLORS.textSecondary} />
+                                </TouchableOpacity>
+                            </View>
+
+                            <Text style={{ color: COLORS.textSecondary, marginBottom: 10 }}>
+                                Replying to <Text style={{ color: COLORS.primary }}>{selectedPost?.title}</Text>
+                            </Text>
+
+                            <TextInput
+                                style={{
+                                    backgroundColor: COLORS.background,
+                                    color: COLORS.text,
+                                    borderRadius: 12,
+                                    padding: 15,
+                                    minHeight: 100,
+                                    textAlignVertical: 'top',
+                                    marginBottom: 15,
+                                    fontFamily: 'Poppins-Regular'
+                                }}
+                                placeholder="What are your thoughts?"
+                                placeholderTextColor={COLORS.textSecondary}
+                                multiline
+                                autoFocus
+                                value={commentText}
+                                onChangeText={setCommentText}
+                            />
+
+                            <TouchableOpacity
+                                style={{
+                                    backgroundColor: COLORS.primary,
+                                    padding: 15,
+                                    borderRadius: 12,
+                                    alignItems: 'center',
+                                    opacity: commentLoading || !commentText.trim() ? 0.7 : 1
+                                }}
+                                onPress={submitComment}
+                                disabled={commentLoading || !commentText.trim()}
+                            >
+                                <Text style={{ color: COLORS.text, fontFamily: 'Poppins-Bold', fontSize: 16 }}>
+                                    {commentLoading ? 'Posting...' : 'Post Comment'}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
         </SafeAreaView>
     );
 };

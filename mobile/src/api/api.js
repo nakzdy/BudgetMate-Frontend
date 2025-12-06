@@ -33,6 +33,7 @@ export const api = axios.create({
 // These run automatically before every request or after every response.
 
 // Request Interceptor: Adds the user's token to the request headers
+// Request Interceptor: Adds the user's token to the request headers
 api.interceptors.request.use((config) => {
   // If we have a token stored globally, attach it
   if (global.authToken) {
