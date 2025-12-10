@@ -165,7 +165,16 @@ const Home = () => {
         <View style={styles.actionRow}>
           <TouchableOpacity
             style={[styles.actionButton, styles.primaryAction]}
-            onPress={() => router.push('/budget/AddExpense')}
+            onPress={() => {
+              // Pass the current balance to the Add Expense screen
+              // We convert it to a string to be safe when passing data between screens
+              router.push({
+                pathname: '/budget/AddExpense',
+                params: {
+                  currentBalance: String(availableBalance)
+                }
+              });
+            }}
             activeOpacity={0.8}
           >
             <MaterialIcons name="add" size={24} color={COLORS.text} />

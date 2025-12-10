@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateScale } from '../../src/utils/responsive';
 import { api } from '../../src/api/api';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import CustomAlert from '../../src/components/ui/CustomAlert';
 
 const COLORS = {
     background: '#141326',
@@ -41,6 +42,10 @@ export default function AddExpense() {
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [errors, setErrors] = useState({});
     const [loading, setLoading] = useState(false);
+    const [alertVisible, setAlertVisible] = useState(false);
+
+    const params = useLocalSearchParams(); // Get the variables passed from the previous screen
+    const currentBalance = params.currentBalance; // This is the available balance we passed from Home
 
     // Action: Submit the Expense Form
     const handleSubmit = async () => {
@@ -53,6 +58,18 @@ export default function AddExpense() {
             currentErrors.amount = 'Amount is required';
         } else if (isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
             currentErrors.amount = 'Enter a valid amount';
+        }
+
+        // We simple check: Is the Amount I want to spend > My Current Balance?
+        // If yes, stop their spending!
+        if (currentBalance) {
+            const expenseAmount = parseFloat(amount);
+            const myBalance = parseFloat(currentBalance);
+
+            if (expenseAmount > myBalance) {
+                setAlertVisible(true);
+                return; // Stop the function here
+            }
         }
 
         // Check if a category is selected
@@ -124,7 +141,28 @@ export default function AddExpense() {
                             value={amount}
                             onChangeText={(text) => {
                                 setAmount(text);
-                                if (errors.amount) setErrors({ ...errors, amount: null });
+
+                                // Inline Validation: Check balance immediately
+                                if (currentBalance) {
+                                    const val = parseFloat(text);
+                                    const bal = parseFloat(currentBalance);
+                                    if (!isNaN(val) && val > bal) {
+                                        setErrors(prev => ({
+                                            ...prev,
+                                            amount: 'Amount exceeds available balance'
+                                        }));
+                                    } else {
+                                        // Clear error if valid
+                                        setErrors(prev => {
+                                            const newErrors = { ...prev };
+                                            delete newErrors.amount; // Remove amount error
+                                            return newErrors;
+                                        });
+                                    }
+                                } else {
+                                    // Fallback: just clear error if user types
+                                    if (errors.amount) setErrors({ ...errors, amount: null });
+                                }
                             }}
                         />
                     </View>
@@ -229,6 +267,13 @@ export default function AddExpense() {
                     </Text>
                 </TouchableOpacity>
             </ScrollView>
+
+            <CustomAlert
+                visible={alertVisible}
+                title="Insufficient Balance"
+                message="You cannot add this expense because it exceeds your available balance."
+                onClose={() => setAlertVisible(false)}
+            />
         </SafeAreaView>
     );
 }
