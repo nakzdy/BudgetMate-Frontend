@@ -2,18 +2,21 @@ import "dotenv/config";
 
 export default {
   expo: {
-    name: "mobile",
-    slug: "mobile",
+    name: "BudgetMate",
+    slug: "budgetmate",
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
-    scheme: "mobile",
+    scheme: "budgetmate",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
     ios: {
       supportsTablet: true,
+      bundleIdentifier: "com.budgetmate.app",
     },
     android: {
+      package: "com.budgetmate.app",
+      versionCode: 1,
       adaptiveIcon: {
         backgroundColor: "#E6F4FE",
         foregroundImage: "./assets/images/android-icon-foreground.png",
@@ -48,6 +51,9 @@ export default {
       reactCompiler: true,
     },
     extra: {
+      eas: {
+        projectId: "9829e17f-b295-4358-996f-2ed270952a25"
+      },
       WEB_API_URL: process.env.WEB_API_URL,
       IOS_API_URL: process.env.IOS_API_URL,
       ANDROID_API_URL: process.env.ANDROID_API_URL,
