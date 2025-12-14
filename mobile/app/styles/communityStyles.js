@@ -89,6 +89,11 @@ export const styles = StyleSheet.create({
         borderRadius: moderateScale(20),
         backgroundColor: COLORS.textSecondary,
         marginRight: scale(12),
+        overflow: 'hidden',
+    },
+    avatarImage: {
+        width: '100%',
+        height: '100%',
     },
     postHeaderText: {
         flex: 1,
