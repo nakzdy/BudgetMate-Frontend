@@ -1,0 +1,434 @@
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { MaterialIcons } from '@expo/vector-icons';
+import { scale, verticalScale, moderateScale } from '../../src/utils/responsive';
+import { api } from '../../src/api/api';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import CustomAlert from '../../src/components/ui/CustomAlert';
+
+const COLORS = {
+    background: '#141326',
+    cardBg: '#433DA3',
+    primary: '#E3823C',
+    accent: '#E33C3C',
+    text: '#FFFFFF',
+    textSecondary: '#D7C7EC',
+    yellow: '#FFC107',
+};
+
+export default function EditExpense() {
+    const router = useRouter();
+    const params = useLocalSearchParams();
+
+    // Get expense data from route params
+    const expenseId = params.id;
+    const [categories, setCategories] = useState([]);
+    const [customCategory, setCustomCategory] = useState('');
+    const [amount, setAmount] = useState(params.amount || '');
+    const [category, setCategory] = useState(params.category || '');
+    const [description, setDescription] = useState(params.description || '');
+    const [date, setDate] = useState(params.date ? new Date(params.date) : new Date());
+    const [mode, setMode] = useState('date');
+    const [showDatePicker, setShowDatePicker] = useState(false);
+    const [errors, setErrors] = useState({});
+    const [loading, setLoading] = useState(false);
+    const [alertVisible, setAlertVisible] = useState(false);
+    const [successVisible, setSuccessVisible] = useState(false);
+
+    useEffect(() => {
+        fetchCategories();
+        // Check if category is "Other" and set custom category
+        if (params.category && !['Housing', 'Food', 'Transportation', 'Utilities', 'Entertainment', 'Bills', 'Savings', 'Shopping', 'Healthcare', 'Education'].includes(params.category)) {
+            setCustomCategory(params.category);
+            setCategory('Other');
+        }
+    }, []);
+
+    const fetchCategories = async () => {
+        try {
+            const response = await api.get('/api/categories');
+            let data = response.data;
+            const catNames = data.map(item => item.name);
+            const filtered = catNames.filter(c => c !== 'Other');
+            setCategories([...filtered, 'Other']);
+        } catch (error) {
+            console.error('Failed to fetch categories:', error);
+            setCategories(['Housing', 'Food', 'Transportation', 'Utilities', 'Other']);
+        }
+    };
+
+    const currentBalance = params.currentBalance;
+
+    // Action: Submit the Updated Expense
+    const handleSubmit = async () => {
+        setErrors({});
+        let currentErrors = {};
+
+        // 1. Validate Input
+        if (!amount) {
+            currentErrors.amount = 'Amount is required';
+        } else if (isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+            currentErrors.amount = 'Enter a valid amount';
+        }
+
+        // Balance check (only if amount changed and increased)
+        if (currentBalance) {
+            const newAmount = parseFloat(amount);
+            const oldAmount = parseFloat(params.amount);
+            const myBalance = parseFloat(currentBalance);
+
+            // If new amount is higher, check if the difference exceeds balance
+            if (newAmount > oldAmount) {
+                const difference = newAmount - oldAmount;
+                if (difference > myBalance) {
+                    setAlertVisible(true);
+                    return;
+                }
+            }
+        }
+
+        if (!category) {
+            currentErrors.category = 'Category is required';
+        } else if (category === 'Other' && !customCategory.trim()) {
+            currentErrors.customCategory = 'Please specify the category';
+        }
+
+        if (Object.keys(currentErrors).length > 0) {
+            setErrors(currentErrors);
+            return;
+        }
+
+        setLoading(true);
+
+        const finalCategory = category === 'Other' ? customCategory.trim() : category;
+
+        try {
+            const response = await api.put(`/api/expenses/${expenseId}`, {
+                amount: parseFloat(amount),
+                category: finalCategory,
+                description,
+                date: date.toISOString(),
+            });
+
+            setSuccessVisible(true);
+        } catch (error) {
+            console.error('Error updating expense:', error);
+            Alert.alert('Error', error.response?.data?.msg || 'Failed to update expense');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const onDateChange = (event, selectedDate) => {
+        setShowDatePicker(Platform.OS === 'ios');
+        if (selectedDate) {
+            setDate(selectedDate);
+        }
+    };
+
+    return (
+        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+            <StatusBar style="light" backgroundColor={COLORS.background} />
+
+            {/* Header */}
+            <View style={styles.header}>
+                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                    <MaterialIcons name="arrow-back" size={moderateScale(24)} color={COLORS.text} />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Edit Expense</Text>
+                <View style={{ width: moderateScale(24) }} />
+            </View>
+
+            <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+                {/* Amount Input */}
+                <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Amount *</Text>
+                    <View style={[styles.inputContainer, errors.amount && styles.inputError]}>
+                        <Text style={styles.currencySymbol}>₱</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="0.00"
+                            placeholderTextColor={COLORS.textSecondary}
+                            keyboardType="decimal-pad"
+                            value={amount}
+                            onChangeText={(text) => {
+                                setAmount(text);
+                                if (errors.amount) setErrors({ ...errors, amount: null });
+                            }}
+                        />
+                    </View>
+                    {errors.amount && <Text style={styles.errorText}>{errors.amount}</Text>}
+                </View>
+
+                {/* Category Selection */}
+                <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Category *</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
+                        {categories.map((cat) => (
+                            <TouchableOpacity
+                                key={cat}
+                                style={[
+                                    styles.categoryChip,
+                                    category === cat && styles.categoryChipActive,
+                                    errors.category && styles.categoryChipError
+                                ]}
+                                onPress={() => {
+                                    setCategory(cat);
+                                    if (errors.category) setErrors({ ...errors, category: null });
+                                }}
+                            >
+                                <Text
+                                    style={[
+                                        styles.categoryChipText,
+                                        category === cat && styles.categoryChipTextActive,
+                                    ]}
+                                >
+                                    {cat}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                    {errors.category && <Text style={styles.errorText}>{errors.category}</Text>}
+
+                    {/* Custom Category Input */}
+                    {category === 'Other' && (
+                        <View style={[styles.inputContainer, { marginTop: verticalScale(16) }, errors.customCategory && styles.inputError]}>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Enter category name"
+                                placeholderTextColor={COLORS.textSecondary}
+                                value={customCategory}
+                                onChangeText={(text) => {
+                                    setCustomCategory(text);
+                                    if (errors.customCategory) setErrors({ ...errors, customCategory: null });
+                                }}
+                            />
+                        </View>
+                    )}
+                    {category === 'Other' && errors.customCategory && <Text style={styles.errorText}>{errors.customCategory}</Text>}
+                </View>
+
+                {/* Date and Time Pickers */}
+                <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Date & Time</Text>
+                    <View style={{ flexDirection: 'row', gap: scale(12) }}>
+                        <TouchableOpacity
+                            style={[styles.dateButton, { flex: 1 }]}
+                            onPress={() => {
+                                setMode('date');
+                                setShowDatePicker(true);
+                            }}
+                        >
+                            <MaterialIcons name="calendar-today" size={moderateScale(20)} color={COLORS.textSecondary} />
+                            <Text style={styles.dateText}>
+                                {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.dateButton, { flex: 1 }]}
+                            onPress={() => {
+                                setMode('time');
+                                setShowDatePicker(true);
+                            }}
+                        >
+                            <MaterialIcons name="access-time" size={moderateScale(20)} color={COLORS.textSecondary} />
+                            <Text style={styles.dateText}>
+                                {date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
+                {showDatePicker && (
+                    <DateTimePicker
+                        value={date}
+                        mode={mode}
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                        onChange={onDateChange}
+                        maximumDate={new Date()}
+                    />
+                )}
+
+                {/* Description Input */}
+                <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Description (Optional)</Text>
+                    <TextInput
+                        style={[styles.input, styles.textArea]}
+                        placeholder="Add a note..."
+                        placeholderTextColor={COLORS.textSecondary}
+                        multiline
+                        numberOfLines={4}
+                        value={description}
+                        onChangeText={setDescription}
+                    />
+                </View>
+
+                {/* Submit Button */}
+                <TouchableOpacity
+                    style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+                    onPress={handleSubmit}
+                    disabled={loading}
+                >
+                    <Text style={styles.submitButtonText}>
+                        {loading ? 'Updating...' : 'Update Expense'}
+                    </Text>
+                </TouchableOpacity>
+            </ScrollView>
+
+            <CustomAlert
+                visible={alertVisible}
+                title="Insufficient Balance"
+                message="The increased amount exceeds your available balance."
+                onClose={() => setAlertVisible(false)}
+            />
+
+            <CustomAlert
+                visible={successVisible}
+                title="Success"
+                message="Expense updated successfully!"
+                type="success"
+                onClose={() => {
+                    setSuccessVisible(false);
+                    router.back();
+                }}
+            />
+        </SafeAreaView>
+    );
+}
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: COLORS.background,
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: scale(20),
+        paddingVertical: verticalScale(16),
+    },
+    backButton: {
+        padding: scale(8),
+    },
+    headerTitle: {
+        fontSize: moderateScale(20),
+        fontFamily: 'Poppins-Bold',
+        color: COLORS.text,
+    },
+    scrollView: {
+        flex: 1,
+    },
+    content: {
+        padding: scale(20),
+        paddingBottom: verticalScale(40),
+    },
+    inputGroup: {
+        marginBottom: verticalScale(24),
+    },
+    label: {
+        fontSize: moderateScale(14),
+        fontFamily: 'Poppins-SemiBold',
+        color: COLORS.yellow,
+        marginBottom: verticalScale(8),
+    },
+    inputContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: COLORS.cardBg,
+        borderRadius: moderateScale(12),
+        paddingHorizontal: scale(16),
+    },
+    currencySymbol: {
+        fontSize: moderateScale(20),
+        fontFamily: 'Poppins-Bold',
+        color: COLORS.text,
+        marginRight: scale(8),
+    },
+    input: {
+        flex: 1,
+        fontSize: moderateScale(16),
+        fontFamily: 'Poppins-Regular',
+        color: COLORS.text,
+        paddingVertical: verticalScale(16),
+    },
+    textArea: {
+        backgroundColor: COLORS.cardBg,
+        borderRadius: moderateScale(12),
+        paddingHorizontal: scale(16),
+        paddingVertical: verticalScale(12),
+        textAlignVertical: 'top',
+        minHeight: verticalScale(100),
+    },
+    categoryScroll: {
+        flexGrow: 0,
+    },
+    categoryChip: {
+        backgroundColor: 'transparent',
+        borderWidth: 1,
+        borderColor: COLORS.textSecondary,
+        borderRadius: moderateScale(20),
+        paddingHorizontal: scale(16),
+        paddingVertical: verticalScale(8),
+        marginRight: scale(8),
+    },
+    categoryChipActive: {
+        backgroundColor: COLORS.yellow,
+        borderColor: COLORS.yellow,
+    },
+    categoryChipText: {
+        fontSize: moderateScale(14),
+        fontFamily: 'Poppins-Medium',
+        color: COLORS.textSecondary,
+    },
+    categoryChipTextActive: {
+        color: COLORS.background,
+        fontFamily: 'Poppins-SemiBold',
+    },
+    dateButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: COLORS.cardBg,
+        borderRadius: moderateScale(12),
+        paddingHorizontal: scale(16),
+        paddingVertical: verticalScale(16),
+    },
+    dateText: {
+        fontSize: moderateScale(16),
+        fontFamily: 'Poppins-Regular',
+        color: COLORS.text,
+        marginLeft: scale(12),
+    },
+    submitButton: {
+        backgroundColor: COLORS.primary,
+        borderRadius: moderateScale(12),
+        paddingVertical: verticalScale(16),
+        alignItems: 'center',
+        marginTop: verticalScale(16),
+    },
+    submitButtonDisabled: {
+        opacity: 0.6,
+    },
+    submitButtonText: {
+        fontSize: moderateScale(16),
+        fontFamily: 'Poppins-Bold',
+        color: COLORS.text,
+    },
+    inputError: {
+        borderWidth: 1,
+        borderColor: COLORS.accent,
+    },
+    categoryChipError: {
+        borderColor: COLORS.accent,
+    },
+    errorText: {
+        color: COLORS.accent,
+        fontSize: moderateScale(12),
+        fontFamily: 'Poppins-Regular',
+        marginTop: verticalScale(4),
+    },
+});

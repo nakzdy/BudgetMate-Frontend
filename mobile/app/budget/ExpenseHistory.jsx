@@ -21,6 +21,7 @@ const COLORS = {
 export default function ExpenseHistory() {
     const router = useRouter();
     const [expenses, setExpenses] = useState([]);
+    const [budgetData, setBudgetData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [deleteAlertVisible, setDeleteAlertVisible] = useState(false);
@@ -35,11 +36,15 @@ export default function ExpenseHistory() {
 
     const loadExpenses = async () => {
         try {
-            const response = await api.get('/api/expenses');
-            setExpenses(response.data);
+            const [expensesRes, budgetRes] = await Promise.all([
+                api.get('/api/expenses'),
+                api.get('/api/budget')
+            ]);
+            setExpenses(expensesRes.data);
+            setBudgetData(budgetRes.data);
         } catch (error) {
-            console.error('Error loading expenses:', error);
-            Alert.alert('Error', 'Failed to load expenses');
+            console.error('Error loading data:', error);
+            Alert.alert('Error', 'Failed to load data');
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -77,6 +82,16 @@ export default function ExpenseHistory() {
         }
     };
 
+    // Calculate available balance for edit validation
+    const monthlyIncome = budgetData?.monthlyIncome || 0;
+    const totalSpent = expenses
+        .filter(item => item.category !== 'Savings')
+        .reduce((sum, item) => sum + item.amount, 0);
+    const emergencyFundSaved = expenses
+        .filter(item => item.category === 'Savings')
+        .reduce((sum, item) => sum + item.amount, 0);
+    const availableBalance = monthlyIncome - totalSpent - emergencyFundSaved;
+
     const renderExpenseItem = ({ item }) => {
         const date = new Date(item.date);
         const formattedDate = date.toLocaleDateString('en-US', {
@@ -106,12 +121,31 @@ export default function ExpenseHistory() {
                         ) : null}
                     </View>
 
-                    <TouchableOpacity
-                        style={styles.deleteButton}
-                        onPress={() => handleDelete(item._id)}
-                    >
-                        <MaterialIcons name="delete-outline" size={moderateScale(24)} color={COLORS.accent} />
-                    </TouchableOpacity>
+                    <View style={styles.actionButtons}>
+                        <TouchableOpacity
+                            style={styles.editButton}
+                            onPress={() => router.push({
+                                pathname: '/budget/EditExpense',
+                                params: {
+                                    id: item._id,
+                                    amount: String(item.amount),
+                                    category: item.category,
+                                    description: item.description || '',
+                                    date: item.date,
+                                    currentBalance: String(availableBalance)
+                                }
+                            })}
+                        >
+                            <MaterialIcons name="edit" size={moderateScale(22)} color={COLORS.yellow} />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.deleteButton}
+                            onPress={() => handleDelete(item._id)}
+                        >
+                            <MaterialIcons name="delete-outline" size={moderateScale(24)} color={COLORS.accent} />
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </View>
         );
@@ -286,6 +320,14 @@ const styles = StyleSheet.create({
         fontSize: moderateScale(14),
         fontFamily: 'Poppins-Regular',
         color: COLORS.textSecondary,
+    },
+    actionButtons: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: scale(8),
+    },
+    editButton: {
+        padding: scale(8),
     },
     deleteButton: {
         padding: scale(8),

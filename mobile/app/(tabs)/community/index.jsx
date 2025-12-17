@@ -309,58 +309,69 @@ const Community = () => {
                 <KeyboardAvoidingView
                     behavior={Platform.OS === "ios" ? "padding" : "height"}
                     style={{ flex: 1 }}
+                    keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
                 >
-                    <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-                        <View style={{ backgroundColor: COLORS.cardBg, padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20 }}>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
-                                <Text style={{ color: COLORS.text, fontSize: 18, fontFamily: 'Poppins-SemiBold' }}>
-                                    Add Comment
+                    <TouchableOpacity
+                        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+                        activeOpacity={1}
+                        onPress={() => setCommentModalVisible(false)}
+                    >
+                        <TouchableOpacity
+                            activeOpacity={1}
+                            onPress={(e) => e.stopPropagation()}
+                        >
+                            <View style={{ backgroundColor: COLORS.cardBg, padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%' }}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+                                    <Text style={{ color: COLORS.text, fontSize: 18, fontFamily: 'Poppins-SemiBold' }}>
+                                        Add Comment
+                                    </Text>
+                                    <TouchableOpacity onPress={() => setCommentModalVisible(false)}>
+                                        <MaterialIcons name="close" size={24} color={COLORS.textSecondary} />
+                                    </TouchableOpacity>
+                                </View>
+
+                                <Text style={{ color: COLORS.textSecondary, marginBottom: 10 }}>
+                                    Replying to <Text style={{ color: COLORS.primary }}>{selectedPost?.title}</Text>
                                 </Text>
-                                <TouchableOpacity onPress={() => setCommentModalVisible(false)}>
-                                    <MaterialIcons name="close" size={24} color={COLORS.textSecondary} />
+
+                                <TextInput
+                                    style={{
+                                        backgroundColor: COLORS.background,
+                                        color: COLORS.text,
+                                        borderRadius: 12,
+                                        padding: 15,
+                                        minHeight: 100,
+                                        maxHeight: 200,
+                                        textAlignVertical: 'top',
+                                        marginBottom: 15,
+                                        fontFamily: 'Poppins-Regular'
+                                    }}
+                                    placeholder="What are your thoughts?"
+                                    placeholderTextColor={COLORS.textSecondary}
+                                    multiline
+                                    autoFocus
+                                    value={commentText}
+                                    onChangeText={setCommentText}
+                                />
+
+                                <TouchableOpacity
+                                    style={{
+                                        backgroundColor: COLORS.primary,
+                                        padding: 15,
+                                        borderRadius: 12,
+                                        alignItems: 'center',
+                                        opacity: commentLoading || !commentText.trim() ? 0.7 : 1
+                                    }}
+                                    onPress={submitComment}
+                                    disabled={commentLoading || !commentText.trim()}
+                                >
+                                    <Text style={{ color: COLORS.text, fontFamily: 'Poppins-Bold', fontSize: 16 }}>
+                                        {commentLoading ? 'Posting...' : 'Post Comment'}
+                                    </Text>
                                 </TouchableOpacity>
                             </View>
-
-                            <Text style={{ color: COLORS.textSecondary, marginBottom: 10 }}>
-                                Replying to <Text style={{ color: COLORS.primary }}>{selectedPost?.title}</Text>
-                            </Text>
-
-                            <TextInput
-                                style={{
-                                    backgroundColor: COLORS.background,
-                                    color: COLORS.text,
-                                    borderRadius: 12,
-                                    padding: 15,
-                                    minHeight: 100,
-                                    textAlignVertical: 'top',
-                                    marginBottom: 15,
-                                    fontFamily: 'Poppins-Regular'
-                                }}
-                                placeholder="What are your thoughts?"
-                                placeholderTextColor={COLORS.textSecondary}
-                                multiline
-                                autoFocus
-                                value={commentText}
-                                onChangeText={setCommentText}
-                            />
-
-                            <TouchableOpacity
-                                style={{
-                                    backgroundColor: COLORS.primary,
-                                    padding: 15,
-                                    borderRadius: 12,
-                                    alignItems: 'center',
-                                    opacity: commentLoading || !commentText.trim() ? 0.7 : 1
-                                }}
-                                onPress={submitComment}
-                                disabled={commentLoading || !commentText.trim()}
-                            >
-                                <Text style={{ color: COLORS.text, fontFamily: 'Poppins-Bold', fontSize: 16 }}>
-                                    {commentLoading ? 'Posting...' : 'Post Comment'}
-                                </Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
+                        </TouchableOpacity>
+                    </TouchableOpacity>
                 </KeyboardAvoidingView>
             </Modal>
         </SafeAreaView>

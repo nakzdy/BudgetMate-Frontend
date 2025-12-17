@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, Image, TouchableOpacity, TextInput, Alert, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, ScrollView, Image, TouchableOpacity, TextInput, Alert, StyleSheet, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -18,9 +18,36 @@ const PostDetails = () => {
     const [currentUserId, setCurrentUserId] = useState(null);
     const [userRole, setUserRole] = useState('user');
     const [editingCommentId, setEditingCommentId] = useState(null);
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
+    const inputRef = useRef(null);
+    const scrollViewRef = useRef(null);
 
     useEffect(() => {
         loadUserData();
+
+        // Keyboard listeners
+        const keyboardDidShowListener = Keyboard.addListener(
+            'keyboardDidShow',
+            (e) => {
+                setKeyboardHeight(e.endCoordinates.height);
+                // Scroll to bottom when keyboard shows
+                setTimeout(() => {
+                    scrollViewRef.current?.scrollToEnd({ animated: true });
+                }, 100);
+            }
+        );
+
+        const keyboardDidHideListener = Keyboard.addListener(
+            'keyboardDidHide',
+            () => {
+                setKeyboardHeight(0);
+            }
+        );
+
+        return () => {
+            keyboardDidShowListener.remove();
+            keyboardDidHideListener.remove();
+        };
     }, []);
 
     const loadUserData = async () => {
@@ -188,140 +215,143 @@ const PostDetails = () => {
                 )}
             </View>
 
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            <ScrollView
+                ref={scrollViewRef}
                 style={{ flex: 1 }}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+                contentContainerStyle={[
+                    styles.scrollContent,
+                    { paddingBottom: keyboardHeight > 0 ? keyboardHeight + 80 : 80 }
+                ]}
+                keyboardShouldPersistTaps="handled"
             >
-                <ScrollView contentContainerStyle={styles.scrollContent}>
-                    {/* Post Content */}
-                    <View style={styles.card}>
-                        <View style={styles.postHeader}>
-                            <View style={styles.avatar}>
-                                <Image
-                                    source={{
-                                        uri: getUserAvatar({
-                                            avatarSeed: post.user?.avatarSeed,
-                                            email: post.user?.email,
-                                            name: post.user?.name || post.user?.username
-                                        })
-                                    }}
-                                    style={styles.avatarImage}
-                                    resizeMode="cover"
-                                />
-                            </View>
-                            <View>
-                                <Text style={styles.username}>{post.user?.username || 'Anonymous'}</Text>
-                                <Text style={styles.meta}>
-                                    {new Date(post.createdAt).toLocaleDateString()} · {post.category}
-                                </Text>
-                            </View>
+                {/* Post Content */}
+                <View style={styles.card}>
+                    <View style={styles.postHeader}>
+                        <View style={styles.avatar}>
+                            <Image
+                                source={{
+                                    uri: getUserAvatar({
+                                        avatarSeed: post.user?.avatarSeed,
+                                        email: post.user?.email,
+                                        name: post.user?.name || post.user?.username
+                                    })
+                                }}
+                                style={styles.avatarImage}
+                                resizeMode="cover"
+                            />
                         </View>
-
-                        <Text style={styles.title}>{post.title}</Text>
-                        <Text style={styles.body}>{post.content}</Text>
-
-                        <View style={styles.actions}>
-                            <TouchableOpacity style={styles.actionButton} onPress={handleLike}>
-                                <MaterialIcons
-                                    name={isLiked ? "favorite" : "favorite-border"}
-                                    size={24}
-                                    color={isLiked ? COLORS.accent : COLORS.textSecondary}
-                                />
-                                <Text style={[styles.actionText, isLiked && { color: COLORS.accent }]}>
-                                    {post.likes?.length || 0} Likes
-                                </Text>
-                            </TouchableOpacity>
-                            <View style={styles.actionButton}>
-                                <MaterialIcons name="chat-bubble-outline" size={24} color={COLORS.textSecondary} />
-                                <Text style={styles.actionText}>{post.comments?.length || 0} Comments</Text>
-                            </View>
+                        <View>
+                            <Text style={styles.username}>{post.user?.username || 'Anonymous'}</Text>
+                            <Text style={styles.meta}>
+                                {new Date(post.createdAt).toLocaleDateString()} · {post.category}
+                            </Text>
                         </View>
                     </View>
 
-                    {/* Comments Section */}
-                    <Text style={styles.sectionTitle}>Comments</Text>
+                    <Text style={styles.title}>{post.title}</Text>
+                    <Text style={styles.body}>{post.content}</Text>
 
-                    {post.comments && post.comments.length > 0 ? (
-                        post.comments.map((comment, index) => {
-                            const isCommentOwner = currentUserId && comment.user?._id === currentUserId;
-                            const canDeleteComment = isCommentOwner || userRole === 'admin';
-
-                            return (
-                                <View key={index} style={styles.commentCard}>
-                                    <View style={styles.commentHeader}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                                            <View style={styles.commentAvatar}>
-                                                <Image
-                                                    source={{
-                                                        uri: getUserAvatar({
-                                                            avatarSeed: comment.user?.avatarSeed,
-                                                            email: comment.user?.email,
-                                                            name: comment.user?.name || comment.user?.username
-                                                        })
-                                                    }}
-                                                    style={styles.avatarImage}
-                                                    resizeMode="cover"
-                                                />
-                                            </View>
-                                            <Text style={styles.commentUser}>
-                                                {comment.user ? (comment.user.username || comment.user.name) : 'User'}
-                                            </Text>
-                                        </View>
-
-                                        {/* Comment Actions */}
-                                        <View style={{ flexDirection: 'row' }}>
-                                            {isCommentOwner && (
-                                                <TouchableOpacity
-                                                    onPress={() => handleStartEditComment(comment)}
-                                                    style={{ padding: 4, marginRight: 8 }}
-                                                >
-                                                    <MaterialIcons name="edit" size={18} color={COLORS.textSecondary} />
-                                                </TouchableOpacity>
-                                            )}
-                                            {canDeleteComment && (
-                                                <TouchableOpacity
-                                                    onPress={() => handleDeleteComment(comment._id)}
-                                                    style={{ padding: 4 }}
-                                                >
-                                                    <MaterialIcons name="delete" size={18} color={COLORS.accent} />
-                                                </TouchableOpacity>
-                                            )}
-                                        </View>
-                                    </View>
-                                    <Text style={styles.commentText}>{comment.text}</Text>
-                                </View>
-                            );
-                        })
-                    ) : (
-                        <Text style={styles.emptyComments}>No comments yet. Be the first!</Text>
-                    )}
-                </ScrollView>
-
-                {/* Comment Input */}
-                <View style={styles.footer}>
-                    {editingCommentId && (
-                        <TouchableOpacity onPress={handleCancelEditComment} style={{ marginRight: 10 }}>
-                            <MaterialIcons name="close" size={24} color={COLORS.accent} />
+                    <View style={styles.actions}>
+                        <TouchableOpacity style={styles.actionButton} onPress={handleLike}>
+                            <MaterialIcons
+                                name={isLiked ? "favorite" : "favorite-border"}
+                                size={24}
+                                color={isLiked ? COLORS.accent : COLORS.textSecondary}
+                            />
+                            <Text style={[styles.actionText, isLiked && { color: COLORS.accent }]}>
+                                {post.likes?.length || 0} Likes
+                            </Text>
                         </TouchableOpacity>
-                    )}
-                    <TextInput
-                        style={styles.input}
-                        placeholder={editingCommentId ? "Update your comment..." : "Write a comment..."}
-                        placeholderTextColor={COLORS.textSecondary}
-                        value={commentText}
-                        onChangeText={setCommentText}
-                        multiline
-                    />
-                    <TouchableOpacity
-                        style={[styles.sendButton, (!commentText.trim() || loading) && { opacity: 0.5 }]}
-                        onPress={submitComment}
-                        disabled={!commentText.trim() || loading}
-                    >
-                        <MaterialIcons name={editingCommentId ? "check" : "send"} size={24} color="#FFF" />
-                    </TouchableOpacity>
+                        <View style={styles.actionButton}>
+                            <MaterialIcons name="chat-bubble-outline" size={24} color={COLORS.textSecondary} />
+                            <Text style={styles.actionText}>{post.comments?.length || 0} Comments</Text>
+                        </View>
+                    </View>
                 </View>
-            </KeyboardAvoidingView>
+
+                {/* Comments Section */}
+                <Text style={styles.sectionTitle}>Comments</Text>
+
+                {post.comments && post.comments.length > 0 ? (
+                    post.comments.map((comment, index) => {
+                        const isCommentOwner = currentUserId && comment.user?._id === currentUserId;
+                        const canDeleteComment = isCommentOwner || userRole === 'admin';
+
+                        return (
+                            <View key={index} style={styles.commentCard}>
+                                <View style={styles.commentHeader}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                                        <View style={styles.commentAvatar}>
+                                            <Image
+                                                source={{
+                                                    uri: getUserAvatar({
+                                                        avatarSeed: comment.user?.avatarSeed,
+                                                        email: comment.user?.email,
+                                                        name: comment.user?.name || comment.user?.username
+                                                    })
+                                                }}
+                                                style={styles.avatarImage}
+                                                resizeMode="cover"
+                                            />
+                                        </View>
+                                        <Text style={styles.commentUser}>
+                                            {comment.user ? (comment.user.username || comment.user.name) : 'User'}
+                                        </Text>
+                                    </View>
+
+                                    {/* Comment Actions */}
+                                    <View style={{ flexDirection: 'row' }}>
+                                        {isCommentOwner && (
+                                            <TouchableOpacity
+                                                onPress={() => handleStartEditComment(comment)}
+                                                style={{ padding: 4, marginRight: 8 }}
+                                            >
+                                                <MaterialIcons name="edit" size={18} color={COLORS.textSecondary} />
+                                            </TouchableOpacity>
+                                        )}
+                                        {canDeleteComment && (
+                                            <TouchableOpacity
+                                                onPress={() => handleDeleteComment(comment._id)}
+                                                style={{ padding: 4 }}
+                                            >
+                                                <MaterialIcons name="delete" size={18} color={COLORS.accent} />
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
+                                </View>
+                                <Text style={styles.commentText}>{comment.text}</Text>
+                            </View>
+                        );
+                    })
+                ) : (
+                    <Text style={styles.emptyComments}>No comments yet. Be the first!</Text>
+                )}
+            </ScrollView>
+
+            {/* Comment Input - Positioned above keyboard */}
+            <View style={[styles.footer, { bottom: keyboardHeight > 0 ? keyboardHeight + 50 : 0 }]}>
+                {editingCommentId && (
+                    <TouchableOpacity onPress={handleCancelEditComment} style={{ marginRight: 10 }}>
+                        <MaterialIcons name="close" size={24} color={COLORS.accent} />
+                    </TouchableOpacity>
+                )}
+                <TextInput
+                    ref={inputRef}
+                    style={styles.input}
+                    placeholder={editingCommentId ? "Update your comment..." : "Write a comment..."}
+                    placeholderTextColor={COLORS.textSecondary}
+                    value={commentText}
+                    onChangeText={setCommentText}
+                    multiline
+                />
+                <TouchableOpacity
+                    style={[styles.sendButton, (!commentText.trim() || loading) && { opacity: 0.5 }]}
+                    onPress={submitComment}
+                    disabled={!commentText.trim() || loading}
+                >
+                    <MaterialIcons name={editingCommentId ? "check" : "send"} size={24} color="#FFF" />
+                </TouchableOpacity>
+            </View>
         </SafeAreaView>
     );
 };
@@ -452,6 +482,10 @@ const styles = StyleSheet.create({
         marginTop: 10,
     },
     footer: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
         flexDirection: 'row',
         padding: 12,
         backgroundColor: '#2C2B3E',
