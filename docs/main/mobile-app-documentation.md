@@ -1,4 +1,10 @@
-# BudgetMate App Documentation
+# BudgetMate - Mobile App Documentation
+
+**Last Updated:** December 17, 2025  
+**Version:** 1.0  
+**Platform:** React Native (Expo)
+
+---
 
 ## Overview
 BudgetMate is a comprehensive personal finance application designed to help users manage their budget, track expenses, learn about finance, and find side income opportunities.
